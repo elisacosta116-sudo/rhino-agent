@@ -1,6 +1,6 @@
 ---
 name: rhino-nurbs
-description: Modelagem NURBS no Rhino 8 e definições Grasshopper via MCP (rhinomcp). Use SEMPRE que o pedido envolver criar, editar, inspecionar ou exportar geometria (curvas, superfícies, polysurfaces, sólidos, lofts, sweeps, revolve, painéis), cenografia, estandes, mobiliário, peças paramétricas, sliders do Grasshopper, ou qualquer menção a Rhino, GH, NURBS, 3dm, STEP ou IGES — mesmo que o usuário não diga "Rhino".
+description: Modelagem NURBS no Rhino 8 e definições Grasshopper via MCP (rhinomcp). Use SEMPRE que o pedido envolver criar, editar, inspecionar, ler ou exportar geometria ou o documento aberto (curvas, superfícies, polysurfaces, sólidos, lofts, sweeps, revolve, painéis), cenografia, estandes, mobiliário, peças paramétricas, sliders do Grasshopper, ou qualquer menção a Rhino, GH, NURBS, 3dm, STEP ou IGES — mesmo que o usuário não diga "Rhino".
 ---
 
 # Rhino NURBS Agent
