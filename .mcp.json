@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "rhino": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": [
+        "rhinomcp"
+      ],
+      "env": {}
+    }
+  }
+}
