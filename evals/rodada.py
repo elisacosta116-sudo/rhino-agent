@@ -138,6 +138,12 @@ def mede(arquivo, check):
         cmd += ["--bbox-min", *[str(v) for v in check["bbox_min_mm"]]]
     if check.get("layer"):
         cmd += ["--layer", check["layer"]]
+    # is_solid ausente no caso = nao verificar. Casca, vela e membrana sao
+    # superficies abertas por definicao e precisam poder declarar isso.
+    if "is_solid" in check:
+        cmd += ["--solido", "fechado" if check["is_solid"] else "aberto"]
+    else:
+        cmd += ["--solido", "qualquer"]
     if check.get("volume_mm3"):
         cmd += ["--volume", str(check["volume_mm3"])]
     proc = subprocess.run(

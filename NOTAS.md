@@ -230,6 +230,51 @@ O servidor põe `include_delta` e `include_health` no envelope de toda mutação
 
 Nada mais mudou. A skill está em `200f2e5`, intocada.
 
+## SONDAGEM 2 — form-finding (fora da série, sem veredito) — 20/09
+
+> Desenhada para forçar a rota de **superfície**, depois de a sondagem 1 entregar
+> orgânico só na silhueta. Sessão `c129745a`, linhas 351–358 do log.
+
+**Briefing:** *"cobertura tipo vela: superfície de dupla curvatura, vão 4000 × 3000, ancorada em 4 pontos, altura máxima 2800. A forma tem que ser ENCONTRADA por relaxação (form-finding), como uma membrana tensionada — não desenhada. Nada de chapa recortada, extrusão de perfil ou loft."*
+
+**14 turnos, 8 chamadas MCP, 55,0 s, US$ 0,1921.**
+
+### Entregou form-finding de verdade
+
+> **Método:** densidades de força, resolvido por relaxação iterativa numa malha de 21 × 16 nós (passo 200 mm). **985 iterações**, resíduo final 1e-4 mm. Bordas como cabos, densidade 6 contra 1 da malha — por isso caem em curva côncava.
+
+Verificado na captura de viewport: **paraboloide hiperbólico anticlástico**, cabos de borda côncavos, sela genuína. É a forma de livro de uma membrana tensionada em quatro pontos — a mesma que o `references/organico-gh.md` cita como caso útil ("cobertura tipo vela apoiada em quatro pontos").
+
+bbox 4000 × 3000 × 2000, Z de 800 a 2800 — vão e altura máxima batendo exatamente. Superfície aberta, 4 arestas nuas, que são as bordas.
+
+**Contraste com a sondagem 1:** lá o orgânico estava na silhueta de uma chapa; aqui está na **superfície**, encontrada por um solver. E saiu **3× mais barata**: US$ 0,19 contra US$ 0,58, em 8 chamadas contra 20.
+
+### ⚠️ Isso mexe com o raciocínio da seção 5 do PRD
+
+A decisão registrada é: *"O LLM emite parâmetros, nunca geometria. A forma orgânica mora no template Grasshopper."* O motivo dado inclui que o modelo erra a topologia.
+
+**Aqui o modelo implementou densidades de força corretamente, num único script, e acertou a topologia.** Isso não derruba a decisão — as razões de **governança** seguem inteiras: execução de código arbitrário é RCE em servidor multiusuário, script não é reproduzível como slider de template, e o eval de um template é mais barato que o de um gerador de código.
+
+Mas muda a **justificativa**: a restrição é de governança e reprodutibilidade, não de capacidade. Convém corrigir isso no PRD, porque um argumento que se apoia em limitação de capacidade envelhece mal.
+
+### Terceira parede segue de pé, e agora com 358 chamadas
+
+**Zero `gh_*` de novo.** O agente cita o motivo no próprio relato:
+
+> "Não usei nenhum template, porque não existe nenhum em `gh-templates/`."
+
+Ele não está ignorando a rota nº 1 da skill — está constatando que ela não existe. **A rota Grasshopper não vai aparecer por instrução; precisa de template construído.**
+
+### Lacuna nº 3 do instrumento, encontrada aqui
+
+O `check.py` reprovava `IsSolid = false` **incondicionalmente**. Uma vela é superfície aberta por definição, e o agente justificou corretamente as 4 arestas nuas. **Hypar perfeito, veredito `FALHOU`.**
+
+Corrigido com `--solido {fechado|aberto|qualquer}`, default `fechado` para preservar o comportamento. No caso, vem de `check.is_solid`: ausente = não verifica. Testado nos dois sentidos — a vela passa como `aberto`, e um cilindro fechado reprova num caso que pede `aberto`. Regressão dos 5 arquivos intacta.
+
+É a terceira lacuna do mesmo tipo em um dia: **o instrumento foi escrito supondo que toda entrega é um sólido fechado de dimensões exatas.** Forma orgânica quebra as três suposições — dimensão exata, tipo Brep, e fechamento.
+
+---
+
 ## Instrumento: Mesh, SubD e envelope — 20/09
 
 Duas das três paredes levantadas pela sondagem orgânica foram derrubadas. Mudança no `check.py`, que é a fonte de verdade — **histórico inteiro re-medido, nenhum veredito mudou.**

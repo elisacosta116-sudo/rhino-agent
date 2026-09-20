@@ -172,6 +172,14 @@ ap.add_argument("--bbox-min", nargs=3, type=float, default=None,
 ap.add_argument("--tol", type=float, default=0.01)
 ap.add_argument("--layer", default=None)
 ap.add_argument("--volume", type=float, default=None)
+# Nem toda entrega e' solido fechado. Uma vela tensionada, uma casca, uma
+# membrana sao superficies ABERTAS por definicao -- e ate 20/09 o script
+# reprovava todas com "IsSolid = false", sem o caso poder dizer o contrario.
+# Medido na sondagem da vela: hypar anticlastico correto, veredito FALHOU.
+ap.add_argument("--solido", choices=("fechado", "aberto", "qualquer"),
+                default="fechado",
+                help="fechado: exige solido; aberto: exige superficie aberta; "
+                     "qualquer: nao verifica")
 a = ap.parse_args()
 
 if a.bbox is None and a.bbox_max is None and a.bbox_min is None:
@@ -282,8 +290,10 @@ if a.bbox_min:
 
 if not alvo["is_valid"]:
     falhas.append("IsValid = false")
-if not alvo["is_solid"]:
+if a.solido == "fechado" and not alvo["is_solid"]:
     falhas.append("IsSolid = false")
+elif a.solido == "aberto" and alvo["is_solid"]:
+    falhas.append("IsSolid = true, mas o caso pede superficie aberta")
 if a.layer and alvo["camada"] != a.layer:
     falhas.append(f"camada: {alvo['camada']} vs esperado {a.layer}")
 
