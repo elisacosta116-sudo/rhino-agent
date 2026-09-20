@@ -1,7 +1,26 @@
 """Verifica um .3dm contra o esperado de um caso. Fonte de verdade dos vereditos.
 
+  # caso de medida: bbox alvo, comparada por igualdade dentro de --tol
   uv run --with rhino3dm python evals/check.py <arquivo.3dm> \
     --bbox 2400 829 1100 --tol 0.01 --layer "ESTANDE::Mobiliario" [--volume 1.455e9]
+
+  # caso de envelope: teto e/ou piso por eixo (0 = eixo sem limite)
+  uv run --with rhino3dm python evals/check.py <arquivo.3dm> \
+    --bbox-max 0 400 0 --bbox-min 2300 0 2150 --layer "ESTANDE::Divisoria"
+
+GEOMETRIA QUE ESTE SCRIPT ENXERGA
+
+Brep, Extrusion, Mesh e SubD. Ate 20/09 so' lia Brep, o que era uma bomba para a
+frente organica: Kangaroo relaxa MALHA e o caminho usual de modelagem passa por
+SubD, entao geometria correta seria reprovada por ser invisivel ao instrumento.
+SubD segue incompleto de proposito -- ver `medir()`.
+
+MEDIDA EXATA vs ENVELOPE
+
+Um caso de primitiva tem alvo ("cilindro de raio 300"). Um caso organico tem
+envelope ("400 mm de profundidade MAXIMA"). Comparar envelope por igualdade
+reprova geometria correta: medido na sondagem de 20/09, onde uma peca de 322,8 mm
+satisfazia um teto de 400 e o veredito saiu FALHOU por 19,3%.
 
 MEDICAO DA BBOX — por que nao usa Brep.GetBoundingBox()
 
@@ -31,12 +50,22 @@ def _malhas(brep):
             yield m
 
 
-def bbox_malha(brep):
-    """Caixa justa, a partir das malhas de render. None se o arquivo nao as tem."""
+def _tris(m):
+    """Triangulos de uma malha. Quad vira dois triangulos."""
+    vs = m.Vertices
+    for fi in range(len(m.Faces)):
+        face = m.Faces[fi]
+        yield vs[face[0]], vs[face[1]], vs[face[2]]
+        if len(face) > 3 and face[2] != face[3]:
+            yield vs[face[0]], vs[face[2]], vs[face[3]]
+
+
+def bbox_de(malhas):
+    """Caixa justa pelos vertices. None se nao ha malha nenhuma."""
     lo = [float("inf")] * 3
     hi = [float("-inf")] * 3
     achou = False
-    for m in _malhas(brep):
+    for m in malhas:
         for i in range(len(m.Vertices)):
             v = m.Vertices[i]
             achou = True
@@ -48,35 +77,105 @@ def bbox_malha(brep):
     return [hi[i] - lo[i] for i in range(3)]
 
 
-def volume_malha(brep):
-    """Volume por teorema da divergencia sobre as malhas. None se nao ha malha."""
+def volume_de(malhas):
+    """Volume por teorema da divergencia. None se nao ha malha."""
     total = 0.0
     achou = False
-    for m in _malhas(brep):
-        vs = m.Vertices
-        for fi in range(len(m.Faces)):
-            face = m.Faces[fi]
-            tris = [(face[0], face[1], face[2])]
-            if len(face) > 3 and face[2] != face[3]:
-                tris.append((face[0], face[2], face[3]))
-            for a, b, c in tris:
-                achou = True
-                pa, pb, pc = vs[a], vs[b], vs[c]
-                total += (
-                    pa.X * (pb.Y * pc.Z - pb.Z * pc.Y)
-                    - pa.Y * (pb.X * pc.Z - pb.Z * pc.X)
-                    + pa.Z * (pb.X * pc.Y - pb.Y * pc.X)
-                ) / 6.0
+    for m in malhas:
+        for pa, pb, pc in _tris(m):
+            achou = True
+            total += (
+                pa.X * (pb.Y * pc.Z - pb.Z * pc.Y)
+                - pa.Y * (pb.X * pc.Z - pb.Z * pc.X)
+                + pa.Z * (pb.X * pc.Y - pb.Y * pc.X)
+            ) / 6.0
     return abs(total) if achou else None
+
+
+def _solta(g):
+    bb = g.GetBoundingBox()
+    return [bb.Max.X - bb.Min.X, bb.Max.Y - bb.Min.Y, bb.Max.Z - bb.Min.Z]
+
+
+def medir(g):
+    """Mede um Brep, Mesh ou SubD. None para o que nao sabemos medir.
+
+    Forma organica raramente sai como Brep: Kangaroo relaxa MALHA, e o caminho
+    usual de modelagem passa por SubD. Ate 20/09 este script pulava os dois, o
+    que reprovaria geometria correta por nao conseguir ve-la.
+
+    SubD e' o caso incompleto e fica declarado como tal: o rhino3dm 8.35 nao
+    expoe extracao da superficie limite, so' `Mesh.CreateFromSubDControlNet`,
+    que devolve a REDE DE CONTROLE -- o mesmo tipo de aproximacao que causou o
+    bug de bbox de 19/09. Entao para SubD medimos a caixa de controle, tratada
+    como limite superior, e nao medimos volume.
+    """
+    if isinstance(g, r.Extrusion):
+        g = g.ToBrep(True)
+
+    if isinstance(g, r.Brep):
+        malhas = list(_malhas(g))
+        justa = bbox_de(malhas)
+        return {
+            "tipo": "Brep",
+            "bbox": justa or _solta(g),
+            "bbox_fonte": "malha" if justa else "casco-de-controle (LIMITE SUPERIOR)",
+            "bbox_solta": _solta(g),
+            "volume": volume_de(malhas) if justa else None,
+            "is_valid": g.IsValid,
+            "is_solid": g.IsSolid,
+            "justa": justa is not None,
+        }
+
+    if isinstance(g, r.Mesh):
+        justa = bbox_de([g])
+        return {
+            "tipo": "Mesh",
+            "bbox": justa or _solta(g),
+            "bbox_fonte": "malha" if justa else "sem vertices",
+            "bbox_solta": _solta(g),
+            "volume": volume_de([g]) if (justa and g.IsClosed) else None,
+            "is_valid": g.IsValid,
+            "is_solid": g.IsClosed,
+            "justa": justa is not None,
+            "nota": None if g.IsClosed else "malha aberta: volume nao definido",
+        }
+
+    if isinstance(g, r.SubD):
+        return {
+            "tipo": "SubD",
+            "bbox": _solta(g),
+            "bbox_fonte": "caixa de controle do SubD (LIMITE SUPERIOR)",
+            "bbox_solta": _solta(g),
+            "volume": None,
+            "is_valid": g.IsValid,
+            "is_solid": g.IsSolid,
+            "justa": False,
+            "nota": "rhino3dm nao expoe a superficie limite do SubD; volume nao medido",
+        }
+
+    return None
 
 
 ap = argparse.ArgumentParser()
 ap.add_argument("file")
-ap.add_argument("--bbox", nargs=3, type=float, required=True)
+ap.add_argument("--bbox", nargs=3, type=float, default=None,
+                help="bbox alvo por eixo, comparada com --tol")
+# Forma organica se especifica por ENVELOPE, nao por medida exata: "400 mm de
+# profundidade maxima" e' um teto, nao um alvo. Comparar isso por igualdade
+# reprova geometria correta -- medido na sondagem de 20/09, onde uma peca de
+# 322,8 mm satisfazia um teto de 400 e o check devolvia FALHOU por 19,3%.
+ap.add_argument("--bbox-max", nargs=3, type=float, default=None,
+                help="teto por eixo; use 0 num eixo para nao limitar")
+ap.add_argument("--bbox-min", nargs=3, type=float, default=None,
+                help="piso por eixo; use 0 num eixo para nao limitar")
 ap.add_argument("--tol", type=float, default=0.01)
 ap.add_argument("--layer", default=None)
 ap.add_argument("--volume", type=float, default=None)
 a = ap.parse_args()
+
+if a.bbox is None and a.bbox_max is None and a.bbox_min is None:
+    ap.error("informe --bbox, --bbox-max ou --bbox-min")
 
 model = r.File3dm.Read(a.file)
 if model is None:
@@ -85,30 +184,32 @@ if model is None:
 
 cands = []
 for obj in model.Objects:
-    g = obj.Geometry
-    if isinstance(g, r.Extrusion):
-        g = g.ToBrep(True)
-    if not isinstance(g, r.Brep):
+    m = medir(obj.Geometry)
+    if m is None:
         continue
-    bb = g.GetBoundingBox()
-    solta = [bb.Max.X - bb.Min.X, bb.Max.Y - bb.Min.Y, bb.Max.Z - bb.Min.Z]
-    justa = bbox_malha(g)
     li = obj.Attributes.LayerIndex
-    cands.append({
+    d = {
         "nome": obj.Attributes.Name,
+        "tipo": m["tipo"],
         "camada": model.Layers[li].FullPath if 0 <= li < len(model.Layers) else None,
-        "is_valid": g.IsValid,
-        "is_solid": g.IsSolid,
-        "bbox": [round(d, 1) for d in (justa or solta)],
-        "bbox_fonte": "malha" if justa else "casco-de-controle (LIMITE SUPERIOR)",
-        "bbox_solta": [round(d, 1) for d in solta],
-        "volume": volume_malha(g) if justa else None,
-        "_tem_malha": justa is not None,
-        "_v": (justa or solta)[0] * (justa or solta)[1] * (justa or solta)[2],
-    })
+        "is_valid": m["is_valid"],
+        "is_solid": m["is_solid"],
+        "bbox": [round(x, 1) for x in m["bbox"]],
+        "bbox_fonte": m["bbox_fonte"],
+        "bbox_solta": [round(x, 1) for x in m["bbox_solta"]],
+        "volume": m["volume"],
+        "_tem_malha": m["justa"],
+        "_v": m["bbox"][0] * m["bbox"][1] * m["bbox"][2],
+    }
+    if m.get("nota"):
+        d["nota"] = m["nota"]
+    cands.append(d)
 
 if not cands:
-    print(json.dumps({"veredito": "FALHOU", "erro": "nenhum Brep no arquivo"}))
+    print(json.dumps({
+        "veredito": "FALHOU",
+        "erro": "nenhuma geometria mensuravel no arquivo (procurados Brep, Extrusion, Mesh, SubD)",
+    }))
     sys.exit(1)
 
 # Escolha do alvo. Ordenar so' por tamanho misturava caixa justa com caixa solta
@@ -139,16 +240,45 @@ justa = alvo["bbox_fonte"] == "malha"
 
 falhas = []
 inconclusivos = []
-for eixo, med, esp in zip("XYZ", alvo["bbox"], a.bbox):
-    desvio = abs(med - esp) / esp
-    if desvio <= a.tol:
-        continue
-    msg = f"bbox {eixo}: medido {med} vs esperado {esp} ({desvio:.1%})"
-    if justa or med < esp:
-        # caixa justa reprova nos dois lados; caixa solta so' reprova por falta
-        falhas.append(msg)
-    else:
-        inconclusivos.append(msg + " - caixa solta superestima; sem malha para decidir")
+
+if a.bbox:
+    # Eixo esperado ZERO e' legitimo -- geometria plana (regiao planar, malha
+    # aberta, chapa sem espessura). Desvio relativo nao existe ai, entao a
+    # comparacao vira absoluta, contra uma fracao do maior eixo do caso.
+    escala = max(a.bbox) or 1.0
+    for eixo, med, esp in zip("XYZ", alvo["bbox"], a.bbox):
+        if esp == 0:
+            if abs(med) <= a.tol * escala:
+                continue
+            falhas.append(f"bbox {eixo}: medido {med} vs esperado 0 (deveria ser plano)")
+            continue
+        desvio = abs(med - esp) / esp
+        if desvio <= a.tol:
+            continue
+        msg = f"bbox {eixo}: medido {med} vs esperado {esp} ({desvio:.1%})"
+        if justa or med < esp:
+            # caixa justa reprova nos dois lados; caixa solta so' reprova por falta
+            falhas.append(msg)
+        else:
+            inconclusivos.append(msg + " - caixa solta superestima; sem malha para decidir")
+
+if a.bbox_max:
+    for eixo, med, teto in zip("XYZ", alvo["bbox"], a.bbox_max):
+        if teto <= 0 or med <= teto * (1 + a.tol):
+            continue
+        # Medida acima do teto reprova mesmo com caixa solta: a caixa solta e'
+        # limite superior, entao se ELA estoura o teto, a real pode nao estourar.
+        msg = f"bbox {eixo}: medido {med} excede o teto de {teto}"
+        (falhas if justa else inconclusivos).append(
+            msg if justa else msg + " - caixa solta superestima; sem malha para decidir")
+
+if a.bbox_min:
+    for eixo, med, piso in zip("XYZ", alvo["bbox"], a.bbox_min):
+        if piso <= 0 or med >= piso * (1 - a.tol):
+            continue
+        # Abaixo do piso reprova sempre: a caixa solta so' erra para cima, entao
+        # se ate' ela ficou abaixo do piso, a real ficou tambem.
+        falhas.append(f"bbox {eixo}: medido {med} abaixo do piso de {piso}")
 
 if not alvo["is_valid"]:
     falhas.append("IsValid = false")
@@ -159,7 +289,7 @@ if a.layer and alvo["camada"] != a.layer:
 
 if a.volume is not None:
     if alvo["volume"] is None:
-        inconclusivos.append("volume: sem malha de render no arquivo")
+        inconclusivos.append("volume: " + (alvo.get("nota") or "sem malha de render no arquivo"))
     else:
         dv = abs(alvo["volume"] - a.volume) / a.volume
         if dv > a.tol:
@@ -167,7 +297,7 @@ if a.volume is not None:
 
 avisos = []
 if len(cands) > 1:
-    avisos.append(f"{len(cands)} Breps no arquivo: sobrou geometria de construcao")
+    avisos.append(f"{len(cands)} objetos mensuraveis no arquivo: sobrou geometria de construcao")
 if ambiguo:
     avisos.append(f"{len(solidos_com_malha)} solidos fechados mensuraveis: alvo escolhido por tamanho")
 
@@ -185,7 +315,7 @@ print(json.dumps({
     "avisos": avisos,
     "objeto": alvo,
     "alvo_escolhido_por": criterio,
-    "outros_breps": outros,
-    "breps_no_arquivo": len(cands),
+    "outros_objetos": outros,
+    "objetos_no_arquivo": len(cands),
 }, ensure_ascii=False, indent=2))
 sys.exit(0 if veredito == "PASSOU" else 1)

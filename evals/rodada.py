@@ -126,11 +126,16 @@ def roda_agente(prompt, modelo, timeout):
 
 
 def mede(arquivo, check):
-    cmd = [
-        sys.executable, str(CHECK), str(arquivo),
-        "--bbox", *[str(v) for v in check["bbox_mm"]],
-        "--tol", str(check.get("tol", 0.01)),
-    ]
+    cmd = [sys.executable, str(CHECK), str(arquivo), "--tol", str(check.get("tol", 0.01))]
+    # Caso de medida usa bbox_mm (igualdade). Caso de envelope -- tipico de forma
+    # organica, onde o briefing da' um teto e nao um alvo -- usa bbox_max/bbox_min.
+    # Os tres podem coexistir: alvo num eixo, teto noutro.
+    if check.get("bbox_mm"):
+        cmd += ["--bbox", *[str(v) for v in check["bbox_mm"]]]
+    if check.get("bbox_max_mm"):
+        cmd += ["--bbox-max", *[str(v) for v in check["bbox_max_mm"]]]
+    if check.get("bbox_min_mm"):
+        cmd += ["--bbox-min", *[str(v) for v in check["bbox_min_mm"]]]
     if check.get("layer"):
         cmd += ["--layer", check["layer"]]
     if check.get("volume_mm3"):
@@ -212,7 +217,7 @@ def bloco_notas(reg, caso):
         linhas.append(
             f"- **Medido:** bbox {med['bbox']} ({med.get('bbox_fonte')}), "
             f"IsSolid {med.get('is_solid')}, camada `{med.get('camada')}`, "
-            f"{reg.get('breps_no_arquivo')} Brep(s)"
+            f"{reg.get('objetos_no_arquivo')} objeto(s)"
         )
     for f in reg.get("falhas") or []:
         linhas.append(f"  - FALHA: {f}")
@@ -352,7 +357,7 @@ def main():
             "is_solid": alvo_medido.get("is_solid"),
             "camada": alvo_medido.get("camada"),
         },
-        "breps_no_arquivo": m.get("breps_no_arquivo"),
+        "objetos_no_arquivo": m.get("objetos_no_arquivo"),
         "falhas": m.get("falhas"),
         "inconclusivos": m.get("inconclusivos"),
         "avisos": m.get("avisos"),

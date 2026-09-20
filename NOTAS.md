@@ -230,6 +230,53 @@ O servidor põe `include_delta` e `include_health` no envelope de toda mutação
 
 Nada mais mudou. A skill está em `200f2e5`, intocada.
 
+## Instrumento: Mesh, SubD e envelope — 20/09
+
+Duas das três paredes levantadas pela sondagem orgânica foram derrubadas. Mudança no `check.py`, que é a fonte de verdade — **histórico inteiro re-medido, nenhum veredito mudou.**
+
+### 1. Envelope em vez de igualdade
+
+`--bbox-max` e `--bbox-min` por eixo, com `0` significando "sem limite neste eixo". Motivo medido: a sondagem pediu *"400 mm de profundidade máxima"*, a peça deu 322,8 — **satisfazia** — e o `check.py` devolvia `FALHOU` por 19,3%, porque comparava igualdade.
+
+A mesma peça, agora:
+
+| Comando | Veredito |
+| --- | --- |
+| `--bbox 2400 400 2200` (igualdade) | `FALHOU` — bbox Y 322,8 vs 400 |
+| `--bbox-max 0 400 0 --bbox-min 2300 0 2150` | **`PASSOU`** |
+| `--bbox-max 0 300 0` (teto que ela de fato estoura) | `FALHOU` — excede o teto |
+
+Assimetria deliberada, na mesma lógica da caixa solta: medida **acima** do teto com caixa solta vira `INCONCLUSIVO` (a caixa solta superestima, a real pode não estourar); medida **abaixo** do piso reprova sempre (se até o limite superior ficou abaixo, a real ficou também).
+
+### 2. O instrumento enxerga Mesh e SubD
+
+Antes lia só Brep — `if not isinstance(g, r.Brep): continue`. Malha, SubD e curva eram **puladas**, e o veredito saía "nenhum Brep no arquivo". Para a frente orgânica isso era uma bomba: **Kangaroo relaxa malha.**
+
+| Tipo | bbox | volume | sólido |
+| --- | --- | --- | --- |
+| Brep / Extrusion | malhas de render | divergência | `IsSolid` |
+| **Mesh** | vértices | divergência, só se fechada | `IsClosed` |
+| **SubD** | caixa de controle, **limite superior** | **não medido** | `IsSolid` |
+
+**SubD fica incompleto, e declarado como tal.** O `rhino3dm` 8.35 não expõe a superfície limite — só `Mesh.CreateFromSubDControlNet`, que devolve a rede de controle, a mesma classe de aproximação que causou o bug de bbox de 19/09. Fingir precisão aí seria repetir o erro. Verificado por arquivo sintético: malha fechada de 300 × 200 × 100 mede volume 6.000.000 exato.
+
+### 3. Defeito encontrado no caminho: eixo esperado zero
+
+`--bbox` com `0` num eixo levantava `ZeroDivisionError`. Geometria plana — região planar, malha aberta, chapa sem espessura — tem eixo zero legitimamente, e o instrumento **quebrava**. Agora eixo zero vira comparação absoluta contra uma fração do maior eixo do caso.
+
+O bug é anterior a esta mudança; só não tinha aparecido porque nenhum caso até aqui tinha eixo nulo.
+
+### Verificações feitas
+
+- **Regressão:** os 5 arquivos com veredito registrado seguem `PASSOU`.
+- **Arquivo sem malha** (rodada 1): segue `FALHOU` em Y e `INCONCLUSIVO` em X, idêntico ao registrado.
+- **Malha fechada sintética:** bbox e volume exatos.
+- **Malha aberta:** bbox correta com Z = 0, `is_solid` false, volume `INCONCLUSIVO` com a causa certa ("malha aberta"), não com a mensagem genérica de malha ausente.
+
+**Ainda de pé:** curva. Uma teia é rede de curvas e o `check.py` continua sem enxergá-la. Não foi feito porque curva não tem volume nem sólido, e o tipo de check para ela (comprimento total, número de segmentos, conectividade) ainda não tem caso que o justifique.
+
+---
+
 ## SONDAGEM — forma orgânica (fora da série, sem veredito) — 20/09
 
 > **Não é rodada de eval.** Sem caso, sem veredito, não entra no placar. Feita para
