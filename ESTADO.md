@@ -9,27 +9,27 @@
 
 ## Próxima ação
 
-**`v2r3` — candidata nº 11: a regra do prefixo de traço em `run_command`.** Diff da skill mostrado e aprovado antes de editar; uma variável só.
+**Parar de mexer na skill e ampliar o dataset.** A fila de candidatas ficou sem item de evidência forte, e as três últimas rodadas mostram por quê: **o `balcao_01` já é resolvido, e um caso só não distingue regra de acaso.**
 
-É a de maior evidência da fila e a única com risco de travar execução autônoma: na v2r2 um `_Arc` sem traço abriu comando interativo no Rhino, ficou pendurado, engoliu o `_-SaveAs` seguinte e **não pôde ser cancelado pelo MCP** — exigiu `Esc` humano. A regra existe em `references/rhinocommon.md` e nunca entrou na skill.
+Dois passos, nesta ordem:
 
-```
-cd C:\Users\eacosta\dev\rhino-agent
-uv run --with rhino3dm python evals/rodada.py balcao_01 --model sonnet --rodada "v2r3"
-```
+**1. Consertar o instrumento para o tier de borda.** Campo `espera_recusa` no caso; o runner passa a distinguir recusa correta de falha. Hoje os dois são indistinguíveis — ambos dão "nenhum `.3dm` novo". São ~30 linhas em `evals/rodada.py`. Sem isso, 6 dos 30 casos do PRD não são avaliáveis, e não vale escrever caso que o instrumento não julga.
 
-Antes: Rhino 8 aberto, documento **NOVO** em mm, `mcpstart` confirmado.
+**2. Escrever o tier fácil — 12 primitivas com volume analítico.** Caixa, cilindro, tubo, cunha, anel. É onde se descobre se o agente usa a superfície tipada sem cair em script, que é a aposta central da arquitetura do PRD. Rodar o lote responde também a pergunta que trava a candidata nº 12: se 25 tool calls é o número certo.
 
 ⚠️ **A baseline anterior a 20/09 não é comparável.** As rodadas 1–4 rodaram sem percepção. Detalhe em `NOTAS.md`, seção "HARNESS v2".
 
 ## Placar da série harness v2
 
-| Rodada | Variável testada | Veredito |
-|---|---|---|
-| v2r1 | percepção do servidor ligada | FALHOU — sem artefato (geometria passava) |
-| v2r2 | salvar vira passo 6 do fluxo | **PASSOU** |
+| Rodada | Variável testada | Veredito | Chamadas | Custo |
+|---|---|---|---|---|
+| v2r1 | percepção do servidor ligada | FALHOU — sem artefato (geometria passava) | 27 | US$ 0,53 |
+| v2r2 | salvar vira passo 6 do fluxo | **PASSOU** | 36 | US$ 0,54 |
+| v2r3 | prefixo de traço em `run_command` | **PASSOU** — sinal inconclusivo (amostra de 1) | 8 | US$ 0,22 |
 
-**1 de 2.** Continua sendo 1 caso de eval de 30 — não é taxa de aprovação.
+**2 de 3.** Continua sendo **1 caso de eval de 30** — não é taxa de aprovação, e é exatamente por isso que a próxima ação é ampliar.
+
+**Variância de rota, mesmo prompt e mesma skill:** v2r1 foi tipada, v2r2 misturou tudo, v2r3 fez um script só. Em nenhuma o agente seguiu a ordem de preferência declarada na skill.
 
 ---
 
@@ -52,9 +52,11 @@ Antes: Rhino 8 aberto, documento **NOVO** em mm, `mcpstart` confirmado.
 
 ## Em voo
 
-- **`v2r3`, candidata nº 11** — diff da skill ainda não escrito. Precisa da sua aprovação antes de editar.
+- Nada. A skill está estável em `21a31ea` e as três últimas rodadas foram registradas.
 
 ## Fechado nesta sessão
+
+- **`v2r3` PASSOU** com 8 tool calls, 44,9 s, US$ 0,2156 — a rodada mais barata e curta da série inteira. Mas o sinal da candidata nº 11 ficou **inconclusivo**: 1 de 1 com traço, amostra de uma chamada. O efeito observado foi o agente abandonar `run_command`, não usá-lo melhor.
 
 - **`v2r2` PASSOU.** Primeira aprovação da série e **primeira vez que o agente salvou sozinho**, em 6 rodadas. `output/balcao_recepcao_v6.3dm`, 1 Brep, arquivo limpo. 36 tool calls, 162,9 s, US$ 0,5361.
 - **A candidata nº 7 funcionou, e a causa foi posicional.** O mesmo texto ("salve em `./output` com sufixo `_vN`") estava na skill nas duas rodadas que não salvaram — o que mudou foi entrar na lista numerada do "fluxo obrigatório". Para este modelo, estrutura pesa mais que ênfase.

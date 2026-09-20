@@ -230,6 +230,59 @@ O servidor põe `include_delta` e `include_health` no envelope de toda mutação
 
 Nada mais mudou. A skill está em `200f2e5`, intocada.
 
+## harness v2, rodada 3 — **PASSOU**, mas o sinal é inconclusivo
+
+- **Modelo:** `claude-sonnet-5` · **Sessão:** `4f1e0fa3` · linhas 281–288 do log
+- **Variável testada:** candidata nº 11 — prefixo de traço em `run_command` entrou no fluxo obrigatório (commit `21a31ea`).
+- **16 turnos, 8 tool calls** (orçamento 25), **44,9 s**, **US$ 0,2156**
+- **Veredito: PASSOU.** `output/balcao_recepcao_v7.3dm`, salvo pelo agente, 1 Brep, arquivo limpo.
+
+```
+bbox      2400,0 × 829,4 × 1100        volume 1,454945589e9 (0,0035%)
+camada    ESTANDE::Mobiliario          is_valid · is_solid · 0 arestas nuas
+```
+
+### ⚠️ O sinal previsto não foi medido de verdade
+
+Antes de rodar ficou escrito: *"fração de `run_command` com traço deve ir de 11% para perto de 100%"*. Resultado: **1 de 1 com traço.**
+
+**Isso não confirma a regra.** A rodada fez uma única chamada de `run_command` — o `_-SaveAs` final. A amostra é 1. O que se pode dizer é que a regra foi seguida na única vez em que se aplicou, e nada além disso.
+
+### O que mudou de verdade foi a rota
+
+| Rodada | Rota | Chamadas |
+| --- | --- | --- |
+| v2r1 | tipada: `create_object` + `offset_curve` ×2 + `extrude_curve`, Python só p/ join | 27 |
+| v2r2 | tipada + `run_command` + Python, com comando interativo travado no meio | 36 |
+| v2r3 | `get_rhinoscript_docs` → **um único script Python faz tudo** | 8 |
+
+A queda de 36 para 8 chamadas **não é atribuível ao prefixo de traço**. É atribuível a o agente ter praticamente abandonado `run_command`. Duas leituras possíveis, e uma rodada não separa:
+
+1. **Efeito colateral do texto.** A regra nova descreve `run_command` como rota que trava a sessão e não pode ser cancelada. Pode ter empurrado o agente para longe da rota inteira, não só para o traço.
+2. **Variância.** Três rodadas, três rotas diferentes, mesmo prompt e mesma skill (fora a linha mudada).
+
+A leitura 1, se verdadeira, é resultado bom por caminho errado: o objetivo era usar `run_command` corretamente, não evitá-lo. E contradiz a ordem de preferência da própria skill, que põe comando nativo **acima** de script.
+
+### Variância de rota é achado próprio
+
+Três rodadas seguidas, mesmo caso, mesmo modelo, rotas completamente diferentes. **A ordem de preferência da skill não está produzindo comportamento consistente** — em nenhuma das três o agente seguiu a ordem declarada (template → tool tipada → comando → script). Na v2r3 foi direto para a última opção.
+
+Isso não apareceu antes porque as rodadas anteriores falhavam por outros motivos. Agora que três passam, a inconsistência fica visível. Candidata nova, nº 13.
+
+### Terceira vez: consultou docs sem hook
+
+Chamada 3, `get_rhinoscript_docs`, antes do script da chamada 5. Terceira rodada seguida em que o agente consulta a documentação por conta própria. **A regra do hook reprovado segue desnecessária.**
+
+### Relato do agente vs medido
+
+Bate item a item: bbox 2400,0 × 829,4 × 1100, volume 1,4552e9 contra 1,454945589e9 medido, sólido, camada certa, arquivo confirmado. Declarou a premissa da flecha (300 mm) e ofereceu refazer com outra.
+
+**Declarou também uma omissão sua:** *"Não capturei o viewport, então a curvatura foi verificada só pelos números."* A skill manda capturar quando a forma é o critério. Ele não capturou e **disse que não capturou** — o oposto do modo de falha do Haiku.
+
+**Hipótese de causa:** provável efeito colateral da redação, não adesão à regra. A rodada que viria a seguir deveria forçar uso de `run_command` para medir o traço com amostra real — ou a regra fica sem confirmação.
+
+---
+
 ## harness v2, rodada 2 — **PASSOU** (a candidata nº 7 funcionou)
 
 - **Modelo:** `claude-sonnet-5` · **Sessão:** `6fd25973` · linhas 245–280 do log
@@ -400,7 +453,8 @@ A nº 7 foi **aplicada e aprovada** na v2r2: salvar virou o passo 6 do fluxo obr
 
 Ordem sugerida, da maior evidência para a menor:
 
-11. **Regra do prefixo de traço em `run_command`.** Está em `references/rhinocommon.md` e **não** na skill. Na v2r2, metade das chamadas de `run_command` usou o traço e metade não; a sem traço abriu um comando interativo que travou a sessão, engoliu o `_-SaveAs` seguinte e não pôde ser cancelado pelo MCP. **Maior evidência da fila, e a única com risco de travar execução autônoma.**
+13. **Ordem de preferência de rotas não está pegando.** Três rodadas aprovadas, três rotas diferentes, e em nenhuma o agente seguiu a ordem declarada (template → tool tipada → comando → script). Na v2r3 foi direto para a última opção. A ordem está escrita em prosa dentro do passo 3; pela lição da nº 7, talvez precise de estrutura, não de ênfase. **Só medível com mais casos** — com um caso só, não dá para distinguir preferência de acaso.
+11. ~~**Prefixo de traço em `run_command`.**~~ **Aplicada na v2r3** (commit `21a31ea`). Resultado **inconclusivo**: 1 de 1 com traço, amostra de uma chamada. O efeito observado foi o agente abandonar `run_command`, não usá-lo melhor. Precisa de rodada com uso real da rota para confirmar — ou de ser reavaliada, já que o efeito colateral contradiz a ordem de preferência da skill.
 10. **Limpar geometria de construção antes de reportar.** A v2r1 deixou 5 objetos órfãos na camada `Default` (o `check.py` não pegou: são curvas, não Breps). O `overview` do próprio servidor manda limpar após verificar, e o fluxo da skill não tem esse passo. Na v2r2 o agente limpou por conta própria — evidência de 1 caso contra 1, precisa de mais rodadas para saber se é regra ou sorte.
 12. **Orçamento de tool calls.** 45 → 25 → 68 → 9 → 27 → 36. A regra "pare em 25 e reporte" nunca pegou em rodada nenhuma. É candidata a virar mecanismo (o hook já tem a regra escrita), mas só depois de a regra estar certa — e hoje não se sabe se 25 é o número certo, já que a rodada aprovada gastou 36.
 2. **Documentar as 27 tools `gh_*` e a superfície tipada.** A rota nº 1 da skill é "template Grasshopper", mas `gh-templates/` está vazio e a skill nunca diz que o agente pode *construir* um grafo GH. Ganhou peso com a descoberta do `create_object type=ARC`: a skill não diz ao agente o que a rota tipada cobre, e ele vai para script sem saber que não precisava.
