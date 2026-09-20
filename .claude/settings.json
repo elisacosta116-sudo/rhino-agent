@@ -1,17 +1,14 @@
 {
   "model": "claude-haiku-4-5-20251001",
   "permissions": {
-    "allow": ["mcp__rhino", "Read", "Edit(./gh-templates/**)", "Edit(./evals/**)"],
-    "deny": ["Bash(rm:*)", "Bash(curl:*)", "Read(./.env)"]
+    "allow": ["mcp__rhino", "Read", "Edit(./gh-templates/**)", "Edit(./evals/**)",
+              "Bash(uv run --with rhino3dm python evals/check.py:*)"],
+    "deny": ["Bash(rm:*)", "Bash(curl:*)", "Bash(cp:*)", "Bash(mv:*)", "Bash(python3:*)", "Bash(python:*)", "Read(./.env)"]
   },
   "hooks": {
     "PostToolUse": [
-      {
-        "matcher": "mcp__rhino__.*",
-        "hooks": [
-          { "type": "command", "command": "uv run --no-project python .claude/hooks/log_call.py" }
-        ]
-      }
+      { "matcher": "mcp__rhino__.*",
+        "hooks": [ { "type": "command", "command": "uv run --no-project python .claude/hooks/log_call.py" } ] }
     ]
   }
 }

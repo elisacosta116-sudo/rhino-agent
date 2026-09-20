@@ -6,7 +6,9 @@
       "args": [
         "rhinomcp"
       ],
-      "env": {}
+      "env": {
+        "RHINO_MCP_PERCEPTION": "1"
+      }
     }
   }
 }
