@@ -230,6 +230,63 @@ O servidor põe `include_delta` e `include_health` no envelope de toda mutação
 
 Nada mais mudou. A skill está em `200f2e5`, intocada.
 
+## PRIMEIRO TEMPLATE GRASSHOPPER — e o elo que falta na arquitetura — 20/09
+
+> Sessão `ec9b77a3`, linhas 359–385. 34 turnos, 27 chamadas MCP, 163,3 s, **US$ 0,7542** — a mais cara do projeto.
+> **Primeiro uso de tools `gh_*` em 385 chamadas registradas.**
+
+### O que funcionou
+
+O agente descobriu a superfície com `gh_batch_search_components`, montou o grafo com `gh_build_graph` numa chamada, e iterou com `gh_mutate_graph`. **21 componentes, 26 conexões, 4 sliders nomeados** (`corda`, `flecha`, `profundidade`, `altura`).
+
+A solução roda com 0 erros e 0 warnings. Perfil fechado de 5609,6 mm = arco externo 2498,8 + arco interno 1910,8 + 2 linhas de 600. `Cap Holes` produz Brep **sólido de 6 faces**. R = 2550, pontas do arco interno em Y = −529,4 → 829,4 mm de profundidade. Consistente com o alvo verificado.
+
+Duas armadilhas de montagem, que valem para os próximos templates:
+
+- **Offset com distância positiva vai para fora** — perfil saiu com 3086 mm em vez de 1910. Precisa de `Negative`.
+- **`Join Curves` gera ramos separados** quando as linhas vêm de árvore mais profunda que o arco. Precisa de `Flatten Tree` antes.
+
+### 🛑 O que não existe: bake
+
+**As 27 tools `gh_*` constroem e calculam, e nenhuma entrega geometria ao documento do Rhino.** Verificado no código do servidor e no log.
+
+| Capacidade | Existe? |
+| --- | --- |
+| montar, ligar, rodar, ler erros | sim |
+| ler o que um parâmetro produziu | **só metadado** |
+| **bake para o Rhino** | **não existe** |
+| salvar o `.gh` | não existe |
+
+O `gh_get_parameter_value` devolve `{"type":"Brep","is_solid":true,"faces":6}` — descrição, não geometria. Sem vértices, sem serialização. A rota C# de dentro do Rhino também não alcança: o assembly do Grasshopper não é referenciado na compilação, e por reflexão deu `NullReferenceException`.
+
+**A seção 5 do PRD desenha `LLM → parâmetros → template .gh → Rhino → .3dm`. A última seta não existe neste servidor.**
+
+### Comportamento do agente: exemplar
+
+Marcou **NÃO CONCLUÍDO**, disse que o alvo não foi verificado, e explicitou que o que tinha era leitura dos componentes do GH e **não** medição no Rhino — *"não é a verificação que você pediu"*. Declarou o efeito colateral (duas camadas vazias criadas) e **recusou-se a salvar** um `.3dm` só com camadas, porque seria enganoso. Parou nas 2 tentativas que a skill permite.
+
+É o oposto exato da rodada 3-bis, que declarou um arquivo inexistente. Nona saída seguida de relato fiel.
+
+### O que ficou versionado
+
+- `gh-templates/balcao.json` — o grafo no formato de entrada do `gh_build_graph`, com os domínios dos sliders. **Formato versionado é JSON, não `.gh`**: não há `gh_save`, e o JSON é diffável e consumível direto.
+- `gh-templates/_canvas_bruto.json` — resposta literal de `gh_get_canvas_state`, para a conversão poder ser auditada.
+- `evals/gh_canvas_para_template.py` — o conversor. Existe porque sem ele o grafo morre ao fechar o Rhino, e refazê-lo custa US$ 0,75.
+
+### ⚠️ Isto é o gatilho para reavaliar o servidor MCP
+
+A seção "Adiado" condicionava a troca a *"necessidade de Rhino 9, necessidade de Grasshopper 2, ou fila de candidatas de skill esgotada"*. **Há agora um quarto motivo, mais forte que os três: o servidor atual não consegue entregar a geometria do Grasshopper.**
+
+Isso reabre a comparação com o `mcneel/RhinoAI`, que foi rejeitado em 19/09 com três razões. Duas delas precisam ser relidas à luz disto:
+
+1. *"o oficial lidera com scripting, que é a rota das nossas falhas"* — enfraquecida. As sondagens de 20/09 mostram o agente usando script com sucesso e consultando docs por conta própria, e a rota C# foi reabilitada por evidência.
+2. *"não se sabe se o oficial tem equivalente ao `include_health`"* — enfraquecida. Medimos que o `include_health` cobre 2 de 27 respostas e nenhuma tool de criação de geometria. Vale menos do que se supunha.
+3. *"trocar zera a baseline de evals"* — **continua válida**, e agora custa mais: são 6 rodadas e 13 casos.
+
+**Não decidido.** Fica registrado como a questão aberta mais importante do projeto.
+
+---
+
 ## SONDAGEM 2 — form-finding (fora da série, sem veredito) — 20/09
 
 > Desenhada para forçar a rota de **superfície**, depois de a sondagem 1 entregar

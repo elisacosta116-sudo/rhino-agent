@@ -7,6 +7,26 @@
 
 ---
 
+## 🛑 Bloqueio arquitetural aberto: o Grasshopper não entrega geometria
+
+O primeiro template foi construído (`gh-templates/balcao.json`, 21 componentes, 4 sliders) e **roda**: 0 erros, perfil fechado, `Cap Holes` produzindo sólido de 6 faces com as medidas certas. **Mas não há como trazer isso ao Rhino.**
+
+As 27 tools `gh_*` montam, ligam, rodam e leem — e **nenhuma faz bake**. O `gh_get_parameter_value` devolve `{"type":"Brep","is_solid":true,"faces":6}`, descrição e não geometria. A rota C# não alcança (assembly do GH fora da compilação).
+
+**A seção 5 do PRD desenha `LLM → parâmetros → template .gh → Rhino → .3dm`. A última seta não existe neste servidor.**
+
+Três caminhos, nenhum decidido:
+
+| Caminho | Custo | O que resolve |
+|---|---|---|
+| **Bake humano** no Grasshopper | zero técnico | quebra a autonomia, que é o ponto do projeto |
+| **Trocar o servidor MCP** (`mcneel/RhinoAI`) | zera a baseline: 6 rodadas, 13 casos | pode ter bake — **não verificado** |
+| **Abandonar `.gh`, manter o princípio** | reescrever a seção 5 do PRD | o objetivo real é "LLM emite parâmetros, não código". Um **script versionado e revisado** com schema de parâmetros dá a mesma garantia de governança, sem Grasshopper. E as sondagens mostraram que o agente executa script com confiabilidade. |
+
+Minha leitura: o terceiro merece consideração séria, porque o Grasshopper era o *mecanismo* escolhido, não o *princípio*. Mas é decisão de produto, sua.
+
+Isto é também o **gatilho para reavaliar o servidor MCP**, que estava condicionado a Rhino 9 / Grasshopper 2 / fila de skills esgotada. Há agora um quarto motivo, mais forte.
+
 ## Próxima ação
 
 **Parar de mexer na skill e ampliar o dataset.** A fila de candidatas ficou sem item de evidência forte, e as três últimas rodadas mostram por quê: **o `balcao_01` já é resolvido, e um caso só não distingue regra de acaso.**

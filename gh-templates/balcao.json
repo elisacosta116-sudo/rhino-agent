@@ -1,0 +1,241 @@
+{
+  "componentes": [
+    {
+      "alias": "corda",
+      "component_name": "Number Slider",
+      "value": 2400,
+      "min": 500,
+      "max": 6000,
+      "decimals": 0
+    },
+    {
+      "alias": "flecha",
+      "component_name": "Number Slider",
+      "value": 300,
+      "min": 10,
+      "max": 1500,
+      "decimals": 0
+    },
+    {
+      "alias": "profundidade",
+      "component_name": "Number Slider",
+      "value": 600,
+      "min": 50,
+      "max": 1500,
+      "decimals": 0
+    },
+    {
+      "alias": "altura",
+      "component_name": "Number Slider",
+      "value": 1100,
+      "min": 100,
+      "max": 3000,
+      "decimals": 0
+    },
+    {
+      "alias": "dois",
+      "component_name": "Panel",
+      "value": "2"
+    },
+    {
+      "alias": "a_b",
+      "component_name": "Division"
+    },
+    {
+      "alias": "neg",
+      "component_name": "Negative"
+    },
+    {
+      "alias": "pt",
+      "component_name": "Construct Point"
+    },
+    {
+      "alias": "pt_2",
+      "component_name": "Construct Point"
+    },
+    {
+      "alias": "pt_3",
+      "component_name": "Construct Point"
+    },
+    {
+      "alias": "arc",
+      "component_name": "Arc 3Pt"
+    },
+    {
+      "alias": "offset",
+      "component_name": "Offset Curve"
+    },
+    {
+      "alias": "end",
+      "component_name": "End Points"
+    },
+    {
+      "alias": "ln",
+      "component_name": "Line"
+    },
+    {
+      "alias": "ln_2",
+      "component_name": "Line"
+    },
+    {
+      "alias": "join",
+      "component_name": "Join Curves"
+    },
+    {
+      "alias": "vec",
+      "component_name": "Vector XYZ"
+    },
+    {
+      "alias": "extr",
+      "component_name": "Extrude"
+    },
+    {
+      "alias": "cap",
+      "component_name": "Cap Holes"
+    },
+    {
+      "alias": "neg_2",
+      "component_name": "Negative"
+    },
+    {
+      "alias": "flatten",
+      "component_name": "Flatten Tree"
+    }
+  ],
+  "conexoes": [
+    {
+      "source": "corda",
+      "target": "a_b",
+      "target_input_index": 0
+    },
+    {
+      "source": "dois",
+      "target": "a_b",
+      "target_input_index": 1
+    },
+    {
+      "source": "a_b",
+      "target": "neg",
+      "target_input_index": 0
+    },
+    {
+      "source": "neg",
+      "target": "pt",
+      "target_input_index": 0
+    },
+    {
+      "source": "flecha",
+      "target": "pt_2",
+      "target_input_index": 1
+    },
+    {
+      "source": "a_b",
+      "target": "pt_3",
+      "target_input_index": 0
+    },
+    {
+      "source": "pt",
+      "target": "arc",
+      "target_input_index": 0
+    },
+    {
+      "source": "pt_2",
+      "target": "arc",
+      "target_input_index": 1
+    },
+    {
+      "source": "pt_3",
+      "target": "arc",
+      "target_input_index": 2
+    },
+    {
+      "source": "arc",
+      "target": "offset",
+      "target_input_index": 0
+    },
+    {
+      "source": "neg_2",
+      "target": "offset",
+      "target_input_index": 1
+    },
+    {
+      "source": "offset",
+      "target": "end",
+      "target_input_index": 0
+    },
+    {
+      "source": "pt",
+      "target": "ln",
+      "target_input_index": 0
+    },
+    {
+      "source": "end",
+      "target": "ln",
+      "target_input_index": 1
+    },
+    {
+      "source": "pt_3",
+      "target": "ln_2",
+      "target_input_index": 0
+    },
+    {
+      "source": "end",
+      "target": "ln_2",
+      "target_input_index": 1
+    },
+    {
+      "source": "flatten",
+      "target": "join",
+      "target_input_index": 0
+    },
+    {
+      "source": "altura",
+      "target": "vec",
+      "target_input_index": 2
+    },
+    {
+      "source": "join",
+      "target": "extr",
+      "target_input_index": 0
+    },
+    {
+      "source": "vec",
+      "target": "extr",
+      "target_input_index": 1
+    },
+    {
+      "source": "extr",
+      "target": "cap",
+      "target_input_index": 0
+    },
+    {
+      "source": "profundidade",
+      "target": "neg_2",
+      "target_input_index": 0
+    },
+    {
+      "source": "arc",
+      "target": "flatten",
+      "target_input_index": 0
+    },
+    {
+      "source": "offset",
+      "target": "flatten",
+      "target_input_index": 0
+    },
+    {
+      "source": "ln",
+      "target": "flatten",
+      "target_input_index": 0
+    },
+    {
+      "source": "ln_2",
+      "target": "flatten",
+      "target_input_index": 0
+    }
+  ],
+  "layout": {
+    "enabled": true,
+    "max_columns": 6
+  }
+}
