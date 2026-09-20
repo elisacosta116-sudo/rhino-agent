@@ -39,7 +39,11 @@ Unidade padrão: milímetros. Z é vertical. Origem (0,0,0) é o centro da base 
 
 **Premissas são fixas.** Um valor que você adotou e declarou (ex.: flecha 300 mm) só muda se o usuário mandar. Se a rota que você escolheu não consegue produzir esse valor, troque de rota, não de premissa.
 
-**6. Reportar.** Informe o que foi criado, as dimensões medidas (não as pedidas), a camada, e qualquer premissa que você adotou.
+**6. Salvar (obrigatório).** Salvar faz parte de concluir. Não pergunte se deve salvar e não ofereça salvar depois: salve antes de reportar, sempre, mesmo que o pedido não mencione arquivo. Resultado não salvo é trabalho perdido.
+
+Salve pelo próprio Rhino, com caminho absoluto dentro de `./output` do projeto e sufixo `_vN`, com um `N` que ainda não exista. **Confirme que o save retornou sucesso:** comando que abre diálogo modal não salva nada — use o prefixo de traço (`_-SaveAs`). Se falhar nas duas tentativas, diga isso na primeira linha do relatório e marque a tarefa como NÃO CONCLUÍDA.
+
+**7. Reportar.** Comece pelo caminho do arquivo salvo. Depois informe o que foi criado, as dimensões medidas (não as pedidas), a camada, e qualquer premissa que você adotou.
 
 ## Heurísticas NURBS
 
@@ -62,9 +66,9 @@ Exemplo c=2400, s=300, d=600, h=1100 → R=2550, r=1950, θ=0,4899 rad, bbox ≈
 
 Se uma operação falhar, leia a mensagem de erro e faça no máximo 2 tentativas corrigidas **por etapa**, com abordagens diferentes. Se ainda falhar, pare e explique ao usuário o que tentou. Orçamento: se passar de 25 tool calls num pedido de um objeto, pare e reporte o estado. Não repita a mesma chamada com os mesmos parâmetros. Nunca apague objetos do usuário sem confirmação explícita.
 
-## Salvar
+## Salvar — onde não salvar
 
-Salve pelo próprio Rhino, com caminho absoluto dentro de `./output` do projeto e sufixo `_vN`. Não use Bash para copiar ou mover arquivos, e não salve fora da pasta do projeto (nada em Desktop, OneDrive ou Documentos).
+Não use Bash para copiar ou mover arquivos, e não salve fora da pasta do projeto (nada em Desktop, OneDrive ou Documentos).
 
 ## Proibições
 
