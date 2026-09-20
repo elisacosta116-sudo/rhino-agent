@@ -230,6 +230,61 @@ O servidor põe `include_delta` e `include_health` no envelope de toda mutação
 
 Nada mais mudou. A skill está em `200f2e5`, intocada.
 
+## harness v2, rodada 1 — FALHOU (sem artefato)
+
+- **Modelo:** `claude-sonnet-5` via `--model sonnet` · **Sessão:** `e5143ceb` · linhas 218–244 do log
+- **34 turnos, 27 tool calls** (orçamento 25, estouro de 8%), **129,8 s**, **US$ 0,5263**
+- **Veredito: FALHOU.** Rodada válida, geometria correta no documento, **nenhum `.3dm` salvo**. Sem artefato não há entrega.
+- **Artefato:** salvo à mão pelo usuário depois da rodada, como na rodada 4, para permitir medição. Medição registrada abaixo.
+
+### A geometria estava certa — medida, não relatada
+
+Artefato salvo à mão pelo usuário após a rodada (`output/balcao_recepcao_v5.3dm`), como na rodada 4. Saída do `check.py`:
+
+```
+veredito  PASSOU
+bbox      2400,0 × 829,4 × 1100        (fonte: malha)    esperado 2400 × 829 × 1100
+volume    1,454948882e9                desvio 0,0035%    esperado 1,455e9
+camada    ESTANDE::Mobiliario
+is_valid true · is_solid true · 1 Brep · sem geometria sobrando
+```
+
+**O que reprovou a rodada foi o save, não a modelagem.** A peça está certa em todos os critérios do caso.
+
+**Fidelidade do relato:** o `analyze_objects` do servidor (chamada 26) devolveu bbox `2400,0049 × 829,4138 × 1100` e volume `1,455176e9` — batendo com a medição independente do `check.py` até a quarta casa. Sem desvio entre medir e reportar, como na rodada 4.
+
+**Resolvido, e vale para as próximas leituras de log:** o `analyze_objects` reportou `"layer":"Mobiliario"`, o que parecia camada errada. O `check.py` sobre o arquivo mostra `ESTANDE::Mobiliario`. **A tool devolve só o nome da folha, não o caminho completo.** Não confunda isso com camada plana.
+
+### Segunda falha de save consecutiva, com o modelo que passa
+
+A rodada 4 entregou peça correta e não salvou. Esta repetiu. As chamadas 26 e 27 foram `analyze_objects` e `capture_viewport` — ele verificou, olhou, e parou.
+
+**A candidata nº 7 deixa de ser "maior valor imediato" e passa a ser o único problema entre este sistema e uma entrega.** Duas de duas com Sonnet.
+
+### A rota tipada funciona — e o agente foi nela sozinho
+
+Sequência de construção: `create_object` → `offset_curve` (2×) → `execute_rhinoscript_python_code` (1×, só o join) → `extrude_curve`.
+
+Confirma a análise de 20/09: a superfície tipada cobre arco e offset, e o **único** buraco é junção de curvas. Nenhuma chamada de C#.
+
+**E contra o hook proposto:** antes do único script Python, o agente chamou `get_rhinoscript_docs` **e** `search_rhinoscript_functions` por conta própria. O comportamento que a regra do hook tentaria forçar aconteceu sem hook. Segunda evidência contra aquela proposta.
+
+### ⚠️ Correção: a percepção cobre menos do que foi documentado
+
+Escrito no `HARNESS.md` e no commit `66d6e15`: *"o servidor anexa `_health` e `_delta` a toda operação que modifica o documento"*. **Falso na prática.**
+
+Das 27 respostas, **2** trouxeram o envelope: `execute_rhinoscript_python_code` e `update_object_attributes`. Não trouxeram: `create_object`, `offset_curve`, `extrude_curve`, `delete_object`, `create_layer`, `modify_object` — todas mutações.
+
+O servidor põe `include_delta` e `include_health` no envelope de toda chamada (`server.py:547`, confirmado no código). **O plugin dentro do Rhino é que só honra as flags em alguns comandos.** A defesa existe e é real, mas é bem mais estreita do que a candidata nº 1 prometia: não cobre a criação de geometria, que é onde o erro nasce.
+
+**Pendência:** mapear quais dos 38 comandos honram o envelope. Sem isso não dá para dizer o que a percepção protege.
+
+### Defeito do instrumento, corrigido
+
+O `evals/rodada.py` quebrou com `UnicodeEncodeError` ao imprimir o relatório do agente: stdout do console no Windows é cp1252 e o relatório trazia `✓`. O veredito já estava decidido, e o `cases.jsonl` não foi tocado — mas **o relatório do agente foi perdido**, e ele é metade do valor da rodada (é a coluna "relato vs medido"). Corrigido com `TextIOWrapper` utf-8 em `stdout` e `stderr`.
+
+---
+
 ## O que foi proposto, analisado e REJEITADO nesta sessão
 
 Eu (supervisor) propus um pacote maior — fechar a rota C# por permissão e ligar um hook `PreToolUse` com três regras. A investigação do log **refutou a justificativa**. Fica registrado para não ser reproposto sem dado novo.

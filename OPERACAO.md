@@ -85,7 +85,9 @@ Confira sempre três coisas, nesta ordem:
 
 Se a peça importa, meça com o instrumento (§4) em vez de acreditar.
 
-Agora há uma ajuda que não depende de você olhar: com `RHINO_MCP_PERCEPTION=1` ligado no `.mcp.json`, **toda operação que modifica o documento volta com `_health`** (objetos que falham validade, com motivo) **e `_delta`** (ids criados e removidos). Se o agente declarar sucesso e o `_health` do mesmo retorno acusar problema, a contradição está no log, não na sua memória.
+Com `RHINO_MCP_PERCEPTION=1` ligado no `.mcp.json`, **algumas** operações voltam com `_health` (objetos que falham validade, com motivo) e `_delta` (ids criados e removidos). Se o agente declarar sucesso e o `_health` do mesmo retorno acusar problema, a contradição está no log, não na sua memória.
+
+Medido: na primeira rodada com a percepção ligada, só 2 de 27 respostas trouxeram o envelope — e **nenhuma das tools de criação de geometria**. Não conte com isso como rede.
 
 ### Sinais de que a rodada está descarrilando
 

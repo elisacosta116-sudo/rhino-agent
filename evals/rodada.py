@@ -20,11 +20,19 @@ certo e que o resultado nao se perca.
 
 import argparse
 import datetime
+import io
 import json
 import pathlib
 import shutil
 import subprocess
 import sys
+
+# O stdout do console no Windows e' cp1252 e estoura em qualquer caractere fora
+# dele. O relatorio do agente vem cheio deles (checkmarks, acentos, setas), e a
+# rodada v2r1 morreu num '✓' DEPOIS de ja ter o veredito -- perdendo o
+# relatorio inteiro, que e' metade do valor da rodada.
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 RAIZ = pathlib.Path(__file__).resolve().parent.parent
 CASOS = RAIZ / "evals" / "cases.jsonl"

@@ -96,7 +96,11 @@ O `rhinomcp` expõe controles por variável de ambiente, declaradas no `.mcp.jso
 "env": { "RHINO_MCP_PERCEPTION": "1" }
 ```
 
-`RHINO_MCP_PERCEPTION=1` faz o servidor pôr `include_delta` **e** `include_health` no envelope de toda operação que modifica o documento (`server.py:547`). O plugin anexa ao resultado um `_delta` com os ids criados e removidos, e um `_health` com os objetos que falham validade e o motivo. **O modelo não participa dessa decisão** — a validação vem junto com o retorno da operação, obedeça ele ou não. É o antídoto direto ao modo de falha central do projeto, declarar sucesso sem verificar.
+`RHINO_MCP_PERCEPTION=1` faz o servidor pôr `include_delta` e `include_health` no envelope de **toda** chamada (`server.py:547`). Quando o envelope é honrado, o resultado vem com um `_delta` (ids criados e removidos) e um `_health` (objetos que falham validade, com o motivo). **O modelo não participa dessa decisão** — a validação vem junto com o retorno da operação, obedeça ele ou não.
+
+> ⚠️ **Medido na primeira rodada com a percepção ligada: a cobertura é estreita.** Das 27 respostas, só **2** trouxeram o envelope (`execute_rhinoscript_python_code` e `update_object_attributes`). `create_object`, `offset_curve`, `extrude_curve`, `delete_object`, `create_layer` e `modify_object` não trouxeram — todas mutações.
+>
+> O servidor manda as flags em todas; **o plugin dentro do Rhino é que só as honra em alguns comandos**. A defesa é real, mas **não cobre a criação de geometria**, que é onde o erro nasce. Mapear quais dos 38 comandos honram o envelope é pendência aberta. Detalhe em `NOTAS.md`, "harness v2, rodada 1".
 
 Outros controles do servidor existem e **não estão ligados**: `RHINO_MCP_VALIDATE` (modos `off`/`warn`/`strict`, default `warn`) e `RHINO_MCP_TIMEOUT` (15 s). Ligar qualquer um é mudança de harness e abre série nova.
 

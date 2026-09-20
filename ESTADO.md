@@ -9,18 +9,20 @@
 
 ## Próxima ação
 
-**Rodar a `harness v2, rodada 1`** — o caso `balcao_01` com Sonnet, com a percepção do servidor ligada.
+**`v2r2` — aplicar a candidata nº 7: obrigar o save na skill.** Diff mostrado e aprovado antes de editar; uma variável só.
+
+A evidência está fechada: **2 de 2 rodadas com Sonnet produziram a peça correta e não salvaram.** Não é mais a "candidata de maior valor imediato" — é o único problema entre este sistema e uma entrega.
 
 ```
 cd C:\Users\eacosta\dev\rhino-agent
-uv run --with rhino3dm python evals/rodada.py balcao_01 --model sonnet --rodada "v2r1"
+uv run --with rhino3dm python evals/rodada.py balcao_01 --model sonnet --rodada "v2r2"
 ```
 
 Antes: Rhino 8 aberto, documento **NOVO** em mm, `mcpstart` confirmado.
 
-**Uma variável só.** A única mudança em relação ao último commit é `RHINO_MCP_PERCEPTION=1` no `.mcp.json`. A skill está intocada em `200f2e5`; o `settings.json` do operador não foi alterado.
+Se o texto da skill não pegar — e o histórico diz que texto costuma não pegar — o passo seguinte é mecanizar: hook `Stop` que impede o agente de encerrar sem `.3dm` novo em `output/`. **Regra primeiro, mecanismo depois**, na ordem que a sessão de 20/09 aprendeu a duras penas.
 
-⚠️ **A baseline antiga não é comparável.** As rodadas 1–4 rodaram sem percepção; agora o modelo vê `_health` e `_delta` no retorno de toda mutação. Taxa de aprovação entre as séries não se compara. O que se compara é o veredito do caso, que não mudou. Detalhe em `NOTAS.md`, seção "Harness v2".
+⚠️ **A baseline anterior a 20/09 não é comparável.** As rodadas 1–4 rodaram sem percepção. Detalhe em `NOTAS.md`, seção "HARNESS v2".
 
 ---
 
@@ -29,7 +31,7 @@ Antes: Rhino 8 aberto, documento **NOVO** em mm, `mcpstart` confirmado.
 | Peça | Estado | Onde |
 |---|---|---|
 | Modelo do agente | `claude-haiku-4-5-20251001` no arquivo — **use `--model sonnet` na chamada** | `.claude/settings.json` |
-| Percepção do servidor | **ligada** — `_health` e `_delta` em toda mutação | `.mcp.json` |
+| Percepção do servidor | **ligada**, mas cobertura estreita: 2 de 27 respostas na v2r1, nenhuma das tools de criação | `.mcp.json` |
 | Rota C# | **aberta** — proposta de fechar foi analisada e **rejeitada** | — |
 | Hook de log | ativo | `.claude/hooks/log_call.py` |
 | Hook de guarda | escrito e testado, **inerte** — não registrado, por decisão | `.claude/hooks/guard_call.py` |
@@ -43,10 +45,13 @@ Antes: Rhino 8 aberto, documento **NOVO** em mm, `mcpstart` confirmado.
 
 ## Em voo
 
-- **harness v2, rodada 1** — preparada, não executada. Precisa do Rhino aberto e de você presente.
+- **`v2r2`, candidata nº 7** — diff da skill ainda não escrito. Precisa da sua aprovação antes de editar.
 
 ## Fechado nesta sessão
 
+- **`harness v2, rodada 1` executada.** FALHOU por ausência de artefato; geometria medida `PASSOU` (bbox 2400,0 × 829,4 × 1100, volume 0,0035% de desvio, camada certa, 1 Brep). 27 tool calls, 129,8 s, US$ 0,5263.
+- Três afirmações minhas corrigidas por medição: cobertura da percepção, existência de tool tipada de arco, e a necessidade de hook para forçar consulta de docs — o agente consultou sozinho.
+- Defeito do runner corrigido: `UnicodeEncodeError` em stdout cp1252 engolia o relatório do agente.
 - Documentação operacional: `TUTORIAL.md`, `ESTADO.md`, `OPERACAO.md`, `../README.md`, `../supervisor/PROMPTS.md`; `HARNESS.md` com as camadas de defesa e corpus.
 - `supervisor/` virou repositório git, com cópia rastreada das travas de `dev/.claude/settings.json`.
 - Runner `evals/rodada.py` e hook `guard_call.py` (este último inerte).
