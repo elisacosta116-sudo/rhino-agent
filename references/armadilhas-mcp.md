@@ -90,9 +90,32 @@ malha      check.py        254.328.522,9    desvio 0,055%
 A bbox saiu exata: os vertices da malha caem sobre a superficie, e num cilindro
 os extremos em 0, 90, 180 e 270 graus sao atingidos.
 
+**O sinal do desvio depende de a curvatura ser aditiva ou subtrativa.** Num
+cilindro solido a malha fica inscrita e mede **para menos**. Num furo cilindrico
+a malha da parede tambem fica inscrita, o que deixa o furo **menor** do que e' —
+e o solido sobra volume. Medido em `13a191fd` (v2r6), caixa 1000x800x400 com
+furo de R=150:
+
+```
+analitico  caixa - furo    291.725.666,1
+Brep                       291.725.666,0    desvio  0,0000%
+malha      check.py        291.809.808,2    desvio +0,0288%   <- para MAIS
+```
+
+Nao suponha a direcao do erro pelo tipo de superficie. Compare sempre em modulo.
+
 **Nao leia essa diferenca como relato infiel do agente.** Sao duas medicoes
 legitimas de objetos diferentes. Curvatura dupla (esfera, toro) faceta nas duas
 direcoes e o desvio e' maior — ainda nao medido.
+
+### A caixa solta mente em geometria aparada
+
+No mesmo arquivo da v2r6, `bbox_solta` deu **1000 x 800 x 420** contra 400 reais
+em Z: 420 e' a altura do cilindro de corte antes de ser aparado, e a superficie
+nao aparada sobrevive no Brep. A malha deu 400,0 exato.
+
+E' a mesma armadilha do bug de bbox corrigido em 19/09. Se o `check.py` ainda
+medisse pelo casco de controle, geometria perfeita reprovaria por 5% em Z.
 
 ---
 

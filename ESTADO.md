@@ -30,10 +30,20 @@
 | v2r3 | `balcao_01` | prefixo de traço em `run_command` | **PASSOU** — sinal inconclusivo | 8 | US$ 0,22 |
 | v2r4 | `prisma_hex_01` | estreia do tier fácil | **PASSOU** | 17 | US$ 0,27 |
 | v2r5 | `cilindro_01` | calibra o facetamento da malha | **PASSOU** | 10 | US$ 0,17 |
+| v2r6 | `caixa_furo_01` | boolean — a operação que derrubou a 3-bis | **PASSOU** | 15 | US$ 0,23 |
 
-**4 de 5, em 3 casos de 13 escritos.** Ainda não é taxa de aprovação: 10 casos nunca rodaram.
+**5 de 6, em 4 casos de 13 escritos.** Ainda não é taxa de aprovação: 9 casos nunca rodaram.
 
-**Orçamento estourado em 3 de 5** (27/25, 36/25, 17/12). A v2r5 foi a primeira dentro do limite, e é também a mais barata — primitiva pura resolvida por tool tipada. O contraste com as 36 chamadas da v2r2 sugere que o custo alto vem da **composição** (arco + offset + join + extrusão), não da modelagem em si.
+**Padrão de custo que já dá para ver:**
+
+| Tipo de caso | Chamadas | Custo |
+|---|---|---|
+| primitiva pura (`cilindro_01`) | 10 | US$ 0,17 |
+| primitiva + boolean (`caixa_furo_01`) | 15 | US$ 0,23 |
+| primitiva com orientação (`prisma_hex_01`) | 17 | US$ 0,27 |
+| composição (`balcao_01`) | 8–36 | US$ 0,22–0,54 |
+
+O caro não é modelar, é **compor**. Se isso se confirmar nos casos restantes, é argumento direto para a tese central do PRD: a forma mora no template `.gh` e o modelo só preenche parâmetros.
 
 **Variância de rota, mesmo prompt e mesma skill:** v2r1 foi tipada, v2r2 misturou tudo, v2r3 fez um script só. Em nenhuma o agente seguiu a ordem de preferência declarada na skill.
 

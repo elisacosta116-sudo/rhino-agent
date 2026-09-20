@@ -230,6 +230,51 @@ O servidor põe `include_delta` e `include_health` no envelope de toda mutação
 
 Nada mais mudou. A skill está em `200f2e5`, intocada.
 
+## harness v2, rodada 6 — **PASSOU** · o boolean que derrubou a 3-bis
+
+- **Caso:** `caixa_furo_01` (tier fácil, único com boolean) · **Sessão:** `13a191fd` · linhas 316–330
+- **21 turnos, 15 tool calls** (orçamento 15, **exatamente no limite**), **40,2 s**, **US$ 0,2338**
+- **Veredito: PASSOU.** `output/caixa_furo_v1.3dm`, 1 Brep, arquivo limpo.
+
+```
+bbox      1000,0 × 800,0 × 400,0     volume 291.809.808
+camada    ESTANDE::Mobiliario        7 faces · 0 arestas nuas
+```
+
+**O boolean é a operação que falhou na 3-bis** ("extrusão produziu fatias, boolean difference falhou"). Aqui passou na primeira, e o agente fez o que a skill manda para booleans: cilindro de corte com **420 mm**, 10 mm sobrando de cada lado, para evitar faces coincidentes. Apagou o cortador depois.
+
+### O facetamento troca de sinal em feature subtrativa
+
+| Medida | Valor | Desvio |
+| --- | --- | --- |
+| Analítico (caixa − furo) | 291.725.666,1 | — |
+| Malha (`check.py`) | 291.809.808,2 | **+0,0288%** |
+| Brep (`analyze_objects`) | 291.725.666,0 | 0,0000% |
+
+**O desvio é positivo.** Na v2r5 a malha media *para menos*; aqui mede *para mais*. A causa é a mesma e o sinal inverte: a malha da parede do furo é **inscrita** no cilindro, então o furo fica menor do que é e sobra volume no sólido.
+
+Consequência prática: tolerância de caso curvo precisa ser **bilateral**, e não dá para supor a direção do erro pelo tipo de superfície — depende de a curvatura ser aditiva ou subtrativa. O `check.py` já compara em módulo, então nada a mudar; mas a nota em `references/armadilhas-mcp.md` estava simplificada e foi corrigida.
+
+### Validação incidental da correção do `check.py`
+
+O `bbox_solta` deste caso é **1000 × 800 × 420** — a caixa de controle acusa Z = 420, que é a altura do cilindro de corte antes de aparado. A malha deu **400,0 exato**.
+
+É exatamente a classe de erro do bug de 19/09 (casco de controle em vez de malha), reaparecendo num caso novo. **Se o `check.py` não tivesse sido corrigido, esta rodada reprovaria por 5% em Z** com geometria perfeita. Segunda vez que o bug teria distorcido um veredito.
+
+### Relato do agente vs medido
+
+Fiel. O volume do Brep bate com o analítico até o inteiro; a diferença para o `check.py` é a nuance de malha já registrada na v2r5. Declarou as premissas (raio e não diâmetro; origem no centro da base), o sobre-comprimento do cortador e o fato de não ter olhado o viewport.
+
+**E reportou a armadilha de camada por conta própria**, sem ser perguntado:
+
+> `get_or_set_current_layer` com `ESTANDE::Mobiliario` não trocou a camada atual, que continua `Default`. (…) Objetos novos criados depois sem esse passo vão para `Default`.
+
+Terceira sessão em que a armadilha aparece, segunda em que o agente a detecta e contorna. Sétima rodada seguida de relato fiel.
+
+**Hipótese de causa:** o caso foi resolvido pela rota tipada com boolean nativo, dentro do orçamento. Reforça o padrão da v2r5 — primitiva e operação tipada saem baratas; o custo alto da série veio da composição do `balcao_01`.
+
+---
+
 ## harness v2, rodada 5 — **PASSOU** · calibra o facetamento da malha
 
 - **Caso:** `cilindro_01` (tier fácil, primeiro curvo) · **Sessão:** `21f5fb88` · linhas 306–315
