@@ -9,20 +9,27 @@
 
 ## Próxima ação
 
-**`v2r2` — aplicar a candidata nº 7: obrigar o save na skill.** Diff mostrado e aprovado antes de editar; uma variável só.
+**`v2r3` — candidata nº 11: a regra do prefixo de traço em `run_command`.** Diff da skill mostrado e aprovado antes de editar; uma variável só.
 
-A evidência está fechada: **2 de 2 rodadas com Sonnet produziram a peça correta e não salvaram.** Não é mais a "candidata de maior valor imediato" — é o único problema entre este sistema e uma entrega.
+É a de maior evidência da fila e a única com risco de travar execução autônoma: na v2r2 um `_Arc` sem traço abriu comando interativo no Rhino, ficou pendurado, engoliu o `_-SaveAs` seguinte e **não pôde ser cancelado pelo MCP** — exigiu `Esc` humano. A regra existe em `references/rhinocommon.md` e nunca entrou na skill.
 
 ```
 cd C:\Users\eacosta\dev\rhino-agent
-uv run --with rhino3dm python evals/rodada.py balcao_01 --model sonnet --rodada "v2r2"
+uv run --with rhino3dm python evals/rodada.py balcao_01 --model sonnet --rodada "v2r3"
 ```
 
 Antes: Rhino 8 aberto, documento **NOVO** em mm, `mcpstart` confirmado.
 
-Se o texto da skill não pegar — e o histórico diz que texto costuma não pegar — o passo seguinte é mecanizar: hook `Stop` que impede o agente de encerrar sem `.3dm` novo em `output/`. **Regra primeiro, mecanismo depois**, na ordem que a sessão de 20/09 aprendeu a duras penas.
-
 ⚠️ **A baseline anterior a 20/09 não é comparável.** As rodadas 1–4 rodaram sem percepção. Detalhe em `NOTAS.md`, seção "HARNESS v2".
+
+## Placar da série harness v2
+
+| Rodada | Variável testada | Veredito |
+|---|---|---|
+| v2r1 | percepção do servidor ligada | FALHOU — sem artefato (geometria passava) |
+| v2r2 | salvar vira passo 6 do fluxo | **PASSOU** |
+
+**1 de 2.** Continua sendo 1 caso de eval de 30 — não é taxa de aprovação.
 
 ---
 
@@ -45,10 +52,12 @@ Se o texto da skill não pegar — e o histórico diz que texto costuma não peg
 
 ## Em voo
 
-- **`v2r2`, candidata nº 7** — diff da skill ainda não escrito. Precisa da sua aprovação antes de editar.
+- **`v2r3`, candidata nº 11** — diff da skill ainda não escrito. Precisa da sua aprovação antes de editar.
 
 ## Fechado nesta sessão
 
+- **`v2r2` PASSOU.** Primeira aprovação da série e **primeira vez que o agente salvou sozinho**, em 6 rodadas. `output/balcao_recepcao_v6.3dm`, 1 Brep, arquivo limpo. 36 tool calls, 162,9 s, US$ 0,5361.
+- **A candidata nº 7 funcionou, e a causa foi posicional.** O mesmo texto ("salve em `./output` com sufixo `_vN`") estava na skill nas duas rodadas que não salvaram — o que mudou foi entrar na lista numerada do "fluxo obrigatório". Para este modelo, estrutura pesa mais que ênfase.
 - **`harness v2, rodada 1` executada.** FALHOU por ausência de artefato; geometria medida `PASSOU` (bbox 2400,0 × 829,4 × 1100, volume 0,0035% de desvio, camada certa, 1 Brep). 27 tool calls, 129,8 s, US$ 0,5263.
 - Três afirmações minhas corrigidas por medição: cobertura da percepção, existência de tool tipada de arco, e a necessidade de hook para forçar consulta de docs — o agente consultou sozinho.
 - Defeito do runner corrigido: `UnicodeEncodeError` em stdout cp1252 engolia o relatório do agente.
@@ -71,6 +80,9 @@ Se o texto da skill não pegar — e o histórico diz que texto costuma não peg
 8. **Medir os dois números da seção 1 do PRD** — tempo por proposta e variações por cliente.
 
 ## Riscos abertos
+
+- **Comando interativo do Rhino trava a sessão e o MCP não cancela.** Na v2r2 um `_Arc` sem prefixo de traço ficou pendurado com linha elástica no viewport, bloqueou o `run_command` seguinte e só saiu com `Esc` humano. **Numa rodada autônoma isso trava tudo a partir dali.** Candidata nº 11 ataca a causa; não há mitigação para o caso de acontecer mesmo assim.
+- **Orçamento de tool calls nunca pegou:** 45 → 25 → 68 → 9 → 27 → 36. E a rodada aprovada gastou 36 contra um limite de 25 — não se sabe se a regra está sendo ignorada ou se o número está errado.
 
 - **`dev/.claude/settings.json` não está sob controle de versão.** É o que impede o supervisor de mexer nas travas do operador. Há cópia rastreada em `supervisor/travas-do-supervisor.json`; re-copie ao mudar.
 - **O `guard_call.py` tem dois defeitos conhecidos** antes de qualquer reconsideração: falha fechada se o log ficar sem escrita, e lê o log inteiro a cada chamada (1,37 MB hoje, por causa dos PNG em base64 do `capture_viewport`).

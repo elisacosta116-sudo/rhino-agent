@@ -230,6 +230,63 @@ O servidor põe `include_delta` e `include_health` no envelope de toda mutação
 
 Nada mais mudou. A skill está em `200f2e5`, intocada.
 
+## harness v2, rodada 2 — **PASSOU** (a candidata nº 7 funcionou)
+
+- **Modelo:** `claude-sonnet-5` · **Sessão:** `6fd25973` · linhas 245–280 do log
+- **Variável testada:** candidata nº 7 — salvar virou o passo 6 do fluxo obrigatório (commit `e404dd2`). Nada mais mudou.
+- **47 turnos, 36 tool calls** (orçamento 25, estouro de 44%), **162,9 s**, **US$ 0,5361**
+- **Veredito: PASSOU.** `output/balcao_recepcao_v6.3dm`, salvo **pelo próprio agente** — primeira vez em 6 rodadas.
+
+```
+bbox      2400,0 × 829,4 × 1100        (fonte: malha)
+volume    1,454944739e9                desvio 0,0035%
+camada    ESTANDE::Mobiliario
+is_valid true · is_solid true · 1 Brep · arquivo limpo
+```
+
+### A mudança de texto pegou — e o sinal previsto apareceu
+
+Antes de rodar ficou escrito que o sinal seria "uma chamada de save entre `analyze_objects` e o fim". Chamada 30: `run_command _-SaveAs "C:\...\output\balcao_recepcao_v6.3dm"`, com o prefixo de traço que a skill passou a exigir.
+
+**O diagnóstico estava certo.** O agente nunca desobedeceu: o fluxo obrigatório não passava por salvar, e a seção "## Salvar" ensinava onde salvar sem dizer que salvar é concluir. Movido para dentro do fluxo, o comportamento mudou na primeira tentativa.
+
+### O mais valioso da rodada: ele detectou o próprio save falhando
+
+O `_-SaveAs` da chamada 30 **não gravou**. Relato do agente:
+
+> Salvei pela API do documento (`WriteFile`), não pelo `_-SaveAs`. O `_-SaveAs` foi engolido por um comando `_Arc` que travou no Rhino depois de um timeout meu. Reabri o arquivo e conferi o conteúdo.
+
+As 6 chamadas depois do save (31–36) são isso: ele verificou, viu que não tinha arquivo, e refez por Python com `WriteFile`. A frase nova da skill — *"Confirme que o save retornou sucesso"* — funcionou num caso que ela não previa. É o oposto da 3-bis, que declarou um `v3.3dm` inexistente.
+
+### Achado de harness: comando interativo trava a sessão e o MCP não cancela
+
+Chamada 6: `_-Arc -1200,0,0 0,300,0 1200,0,0`. Chamada 11: `_Arc w-1200,0,0 ...` sem o traço — **abre o comando interativo**. Ele ficou pendurado com linha elástica no viewport, engoliu o `_-SaveAs` seguinte, e a chamada 32 (`run_command` com comando vazio) é a tentativa fracassada de cancelar.
+
+> **Risco para execução autônoma.** Um comando interativo pendurado no Rhino bloqueia chamadas posteriores e **não há como cancelar pelo MCP** — exige `Esc` humano no Rhino. Numa rodada sem ninguém olhando, isso trava tudo a partir dali.
+
+Candidata nova daqui: a skill já tem a regra do prefixo de traço em `references/rhinocommon.md`, mas ela não está na skill. Metade das chamadas de `run_command` desta rodada usou o traço e metade não.
+
+### Orçamento: o problema que piora
+
+45 → 25 → 68 → 9 → 27 → **36**. Duas rodadas seguidas estourando, e a skill manda parar em 25. Parte desta rodada se explica (recuperação do save, comando travado), mas a regra segue sem pegar em nenhuma rodada.
+
+### Relato do agente vs medido
+
+| Item | Relatado | Medido (`check.py`) |
+|---|---|---|
+| bbox X | 2399,999 | 2400,0 |
+| bbox Y | 829,41 | 829,4 |
+| bbox Z | 1100 | 1100 |
+| volume | 1,4552e9 | 1,454944739e9 |
+| sólido / camada | true / `ESTANDE::Mobiliario` | true / `ESTANDE::Mobiliario` |
+| arquivo | `output/balcao_recepcao_v6.3dm` | existe, 1 Brep |
+
+Sem desvio entre medir e reportar. Declarou as premissas (flecha 300 mm), a pendência do comando travado e a ausência de template GH. **Terceira rodada seguida de relato fiel** — o modo de falha de julgamento do Haiku não reapareceu com Sonnet em nenhuma rodada.
+
+**Hipótese de causa do sucesso:** a regra falhava por posição, não por redação. O mesmo conteúdo ("salve em ./output com sufixo _vN") estava na skill nas duas rodadas que não salvaram; o que mudou foi estar dentro da lista numerada que a skill chama de "fluxo obrigatório (não pule etapas)". Sugere que, para este modelo, a estrutura do documento carrega mais força normativa que a ênfase do texto.
+
+---
+
 ## harness v2, rodada 1 — FALHOU (sem artefato)
 
 - **Modelo:** `claude-sonnet-5` via `--model sonnet` · **Sessão:** `e5143ceb` · linhas 218–244 do log
@@ -339,9 +396,13 @@ O buraco real na superfície tipada é **junção de curvas** — não há `join
 
 A nº 1 (`include_health`) saiu: virou configuração de servidor. As nº 3 e 4 (`dry_run`, proibir C#) foram **reprovadas** pela análise de 20/09 — ver "O que foi proposto, analisado e REJEITADO".
 
+A nº 7 foi **aplicada e aprovada** na v2r2: salvar virou o passo 6 do fluxo obrigatório e o agente salvou na primeira tentativa. Sai da fila.
+
 Ordem sugerida, da maior evidência para a menor:
 
-7. **Obrigar o save antes de reportar.** O Sonnet entregou peça correta e **não salvou** — "porque você não pediu". Numa execução autônoma isso perde o trabalho. A skill já manda salvar; o texto não está pegando. Candidata de maior valor imediato, porque afeta o modelo que hoje passa. **Próxima da fila.**
+11. **Regra do prefixo de traço em `run_command`.** Está em `references/rhinocommon.md` e **não** na skill. Na v2r2, metade das chamadas de `run_command` usou o traço e metade não; a sem traço abriu um comando interativo que travou a sessão, engoliu o `_-SaveAs` seguinte e não pôde ser cancelado pelo MCP. **Maior evidência da fila, e a única com risco de travar execução autônoma.**
+10. **Limpar geometria de construção antes de reportar.** A v2r1 deixou 5 objetos órfãos na camada `Default` (o `check.py` não pegou: são curvas, não Breps). O `overview` do próprio servidor manda limpar após verificar, e o fluxo da skill não tem esse passo. Na v2r2 o agente limpou por conta própria — evidência de 1 caso contra 1, precisa de mais rodadas para saber se é regra ou sorte.
+12. **Orçamento de tool calls.** 45 → 25 → 68 → 9 → 27 → 36. A regra "pare em 25 e reporte" nunca pegou em rodada nenhuma. É candidata a virar mecanismo (o hook já tem a regra escrita), mas só depois de a regra estar certa — e hoje não se sabe se 25 é o número certo, já que a rodada aprovada gastou 36.
 2. **Documentar as 27 tools `gh_*` e a superfície tipada.** A rota nº 1 da skill é "template Grasshopper", mas `gh-templates/` está vazio e a skill nunca diz que o agente pode *construir* um grafo GH. Ganhou peso com a descoberta do `create_object type=ARC`: a skill não diz ao agente o que a rota tipada cobre, e ele vai para script sem saber que não precisava.
 9. **Tabela de roteamento do corpus na skill** — "para esta dúvida, leia este arquivo". Foi escrita e **revertida** em 20/09 para manter a rodada 1 do harness v2 com uma variável só. Candidata pronta, texto em `git log`.
 5. **Forçar `get_modeling_guidance("verification")`.** A skill já manda no passo 5 e o agente nunca leu: chamou `get_modeling_guidance` 6 vezes, sempre com `overview`. Pode ser problema de formulação, não de ausência.

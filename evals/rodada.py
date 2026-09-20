@@ -284,6 +284,15 @@ def main():
 
     print("\n" + json.dumps(m, ensure_ascii=False, indent=2))
 
+    # O relato do agente e' metade do valor da rodada: a coluna "relato vs
+    # medido" e' o que separou erro de medicao de erro de julgamento em toda a
+    # serie. Ate a v2r2 ele so' era impresso quando a rodada falhava, e tinha
+    # que ser pescado do transcript a mao.
+    print("\n" + "-" * 62)
+    print("RELATO DO AGENTE (compare com o medido acima)")
+    print("-" * 62)
+    print(r.get("result") or "(o agente nao devolveu texto)")
+
     if a.dry_run:
         print("\n-- --dry-run: cases.jsonl nao foi alterado")
     else:
