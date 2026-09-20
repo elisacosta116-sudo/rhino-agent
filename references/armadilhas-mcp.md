@@ -72,6 +72,30 @@ Em 35 chamadas de `run_command` nas seis primeiras rodadas, **4 usaram o traço*
 
 ---
 
+## Em geometria curva, `analyze_objects` e o `check.py` medem objetos diferentes
+
+`analyze_objects` devolve o volume do **Brep** — a superfície exata. O
+`evals/check.py` mede pela **malha de render** — a aproximação facetada gravada
+no arquivo. Em faces planas os dois coincidem; em superfície curva a malha fica
+inscrita e mede **para menos**.
+
+Medido em `21f5fb88` (v2r5), cilindro de R=300 e h=900:
+
+```
+analitico  pi.r2.h        254.469.004,9
+Brep       analyze_objects 254.469.006,0    desvio 0,0000%
+malha      check.py        254.328.522,9    desvio 0,055%
+```
+
+A bbox saiu exata: os vertices da malha caem sobre a superficie, e num cilindro
+os extremos em 0, 90, 180 e 270 graus sao atingidos.
+
+**Nao leia essa diferenca como relato infiel do agente.** Sao duas medicoes
+legitimas de objetos diferentes. Curvatura dupla (esfera, toro) faceta nas duas
+direcoes e o desvio e' maior — ainda nao medido.
+
+---
+
 ## `analyze_objects` devolve só o nome da folha da camada
 
 O campo `layer` traz `"Mobiliario"`, não `"ESTANDE::Mobiliario"`. Isso parece

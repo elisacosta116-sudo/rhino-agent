@@ -230,6 +230,46 @@ O servidor põe `include_delta` e `include_health` no envelope de toda mutação
 
 Nada mais mudou. A skill está em `200f2e5`, intocada.
 
+## harness v2, rodada 5 — **PASSOU** · calibra o facetamento da malha
+
+- **Caso:** `cilindro_01` (tier fácil, primeiro curvo) · **Sessão:** `21f5fb88` · linhas 306–315
+- **16 turnos, 10 tool calls** — **primeira rodada da série dentro do orçamento** (10 de 10)
+- **26,9 s**, **US$ 0,1722** — a mais barata e a mais rápida até aqui
+- **Veredito: PASSOU.** `output/cilindro_estrutura_v1.3dm`, 1 Brep, arquivo limpo.
+
+```
+bbox      600,0 × 600,0 × 900,0      exato
+volume    254.328.523                camada ESTANDE::Estrutura
+```
+
+### A calibração: o facetamento é 36× menor do que eu arbitrei
+
+| Medida | Valor | Desvio do analítico |
+| --- | --- | --- |
+| Analítico (π·300²·900) | 254.469.004,9 | — |
+| **Malha de render** (o que o `check.py` mede) | 254.328.522,9 | **0,055%** |
+| **Brep** (o que o `analyze_objects` devolve) | 254.469.006,0 | 0,0000% |
+
+A bbox saiu **exata**: os vértices da malha caem sobre a superfície, e num cilindro os extremos em 0°, 90°, 180° e 270° são atingidos.
+
+**Tolerância dos curvos apertada de 2% para 0,5%**, nos casos de curvatura simples (`cilindro_01`, `tubo_01`, `cone_01`, `calha_01`, `caixa_furo_01`) — 0,055% medido deixa 9× de folga. `esfera_01` e `toro_01` **ficam em 2%**: curvatura dupla faceta nas duas direções e o erro é maior, ainda sem medição.
+
+Regra do projeto cumprida: mudou o instrumento, re-mediu o histórico. `cilindro_01` é o único caso com rodada registrada afetado pelo aperto, e o veredito continua `PASSOU` sob 0,5%.
+
+### ⚠️ Em caso curvo, agente e `check.py` medem coisas diferentes — e os dois estão certos
+
+O agente relatou 254.469.006 e o `check.py` mediu 254.328.523. **Não é divergência de fidelidade.** O `analyze_objects` devolve o volume do **Brep** (a superfície exata); o `check.py` mede pela **malha de render** (a aproximação facetada).
+
+Isso vale para toda geometria curva daqui em diante: o número do agente vai bater com o analítico e o do instrumento vai ficar ligeiramente abaixo. **Não leia essa diferença como relato infiel** — é a assinatura de duas medições legítimas de objetos diferentes. Em caso planar os dois coincidem.
+
+### Relato do agente vs medido
+
+Fiel, com a ressalva acima. Declarou a premissa de posição (base na origem), informou que criou as duas camadas e que não tocou nas existentes, e confirmou o save com o tamanho em bytes. Sexta rodada seguida de relato fiel.
+
+**Hipótese de causa do sucesso e do baixo custo:** caso de primitiva pura, com a tool tipada resolvendo em uma chamada. É o comportamento que a arquitetura do PRD aposta — e o contraste com as 36 chamadas da v2r2 sugere que o custo alto vem da composição (arco + offset + join + extrusão), não da modelagem em si.
+
+---
+
 ## harness v2, rodada 4 — **PASSOU** · primeiro caso do tier fácil
 
 - **Caso:** `prisma_hex_01` (tier fácil, estreia do dataset ampliado) · **Sessão:** `5f7984fe` · linhas 289–305

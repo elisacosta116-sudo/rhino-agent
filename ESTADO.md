@@ -17,7 +17,7 @@
 
 **3. Rodar `impossivel_01`** — exercita o instrumento novo numa rodada real e vale como primeiro dado do tier borda.
 
-**Calibrar a tolerância dos casos curvos.** O `prisma_hex_01` (planar) bateu com o analítico em 0,00016%, confirmando que 0,5% é folgado para planares. Os curvos estão em 2% por precaução contra o facetamento da malha de render, **e isso ainda não foi medido** — a primeira rodada de `cilindro_01` ou `esfera_01` dá o número real, e aí dá para apertar.
+~~**Calibrar a tolerância dos casos curvos.**~~ **Feito na v2r5.** Facetamento de curvatura simples: 0,055%, contra os 2% que eu tinha arbitrado. Tolerância apertada para 0,5% em `cilindro_01`, `tubo_01`, `cone_01`, `calha_01` e `caixa_furo_01`. **`esfera_01` e `toro_01` ficam em 2%** — curvatura dupla faceta nas duas direções, ainda sem medição. Rodar um dos dois fecha a calibração.
 
 ⚠️ **A baseline anterior a 20/09 não é comparável.** As rodadas 1–4 rodaram sem percepção. Detalhe em `NOTAS.md`, seção "HARNESS v2".
 
@@ -29,10 +29,11 @@
 | v2r2 | `balcao_01` | salvar vira passo 6 do fluxo | **PASSOU** | 36 | US$ 0,54 |
 | v2r3 | `balcao_01` | prefixo de traço em `run_command` | **PASSOU** — sinal inconclusivo | 8 | US$ 0,22 |
 | v2r4 | `prisma_hex_01` | estreia do tier fácil | **PASSOU** | 17 | US$ 0,27 |
+| v2r5 | `cilindro_01` | calibra o facetamento da malha | **PASSOU** | 10 | US$ 0,17 |
 
-**3 de 4, em 2 casos de 13 escritos.** Ainda não é taxa de aprovação: 11 casos nunca rodaram.
+**4 de 5, em 3 casos de 13 escritos.** Ainda não é taxa de aprovação: 10 casos nunca rodaram.
 
-**Orçamento estourado em 3 de 4 rodadas** (27/25, 36/25, 17/12). Na v2r4 parte do estouro é contornar a armadilha de camada — custo da superfície, não desperdício do modelo.
+**Orçamento estourado em 3 de 5** (27/25, 36/25, 17/12). A v2r5 foi a primeira dentro do limite, e é também a mais barata — primitiva pura resolvida por tool tipada. O contraste com as 36 chamadas da v2r2 sugere que o custo alto vem da **composição** (arco + offset + join + extrusão), não da modelagem em si.
 
 **Variância de rota, mesmo prompt e mesma skill:** v2r1 foi tipada, v2r2 misturou tudo, v2r3 fez um script só. Em nenhuma o agente seguiu a ordem de preferência declarada na skill.
 
