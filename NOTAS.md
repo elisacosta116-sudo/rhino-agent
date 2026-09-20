@@ -230,6 +230,70 @@ O servidor põe `include_delta` e `include_health` no envelope de toda mutação
 
 Nada mais mudou. A skill está em `200f2e5`, intocada.
 
+## SONDAGEM — forma orgânica (fora da série, sem veredito) — 20/09
+
+> **Não é rodada de eval.** Sem caso, sem veredito, não entra no placar. Feita para
+> descobrir onde a forma orgânica quebra, antes de investir código em qualquer
+> uma das três paredes previstas. Sessão `25491602`, linhas 331–350 do log.
+
+**Briefing:** *"divisória orgânica para estande, inspirada em coral: 2400 × 2200 mm, 400 mm de profundidade máxima, com ramificação e vazados. Superfície contínua, não uma treliça de tubos. Camada `ESTANDE::Divisoria`."*
+
+**26 turnos, 20 chamadas MCP, 277,4 s, US$ 0,5843** — a mais cara de todas, ~3,4× uma primitiva.
+
+**Entregue:** `output/divisoria_coral_v1.3dm`, um Brep sólido fechado, 166 faces, 0 arestas nuas, camada certa, arquivo limpo. bbox medida 2409,2 × 322,8 × 2200,0.
+
+### Rota: C#, seis vezes
+
+| Tool | Chamadas |
+| --- | --- |
+| `execute_rhinocommon_csharp_code` | **6** |
+| `capture_viewport` | 4 |
+| `get_modeling_guidance` | 3 |
+| `create_layer` | 3 |
+| outras | 4 |
+
+**Zero tools `gh_*`.** O contador chega a **350 chamadas registradas sem uma única chamada de Grasshopper.**
+
+Para geração de forma, o agente vai para código — e é razoável: não existe tool tipada para silhueta ramificada, e a ordem de preferência da skill começa por "template já existente", que não existe. **É a evidência mais forte até aqui contra a proposta de fechar a rota C#**, que já tinha sido reprovada na análise de 20/09. Tivesse sido aplicada, esta sondagem não teria saído do lugar.
+
+### Parede 1 (instrumento só vê Brep) — não se aplicou aqui, mas segue de pé
+
+A saída foi **Brep**, e o `check.py` a enxergou normalmente. A previsão de que forma orgânica sairia como malha estava errada **para esta rota**: o agente fez chapa recortada e extrudada, que é NURBS.
+
+A parede continua válida para a rota que o PRD aposta — Kangaroo relaxa **malha**, e malha o `check.py` ignora. Só não foi essa a rota tomada.
+
+### Parede 2 (igualdade vs restrição) — confirmada, com demonstração
+
+O briefing pediu **"400 mm de profundidade máxima"**. A peça deu 322,8 mm, o que **satisfaz o pedido**. Rodando o `check.py` com 400 como esperado:
+
+```
+veredito: FALHOU
+falhas: ["bbox Y: medido 322.8 vs esperado 400.0 (19.3%)"]
+```
+
+**Geometria correta, reprovada pelo instrumento.** Não é bug: o `check.py` compara igualdade, e o briefing declarou um teto. Caso orgânico precisa de um tipo de check novo — faixa (`min`/`max`) por eixo em vez de valor com tolerância. É pré-requisito de qualquer caso de tier orgânico.
+
+### O que a peça é, de fato
+
+Vista pela captura de perspectiva: ramificação convincente — troncos, bifurcações, pontas afinando, ondulação em Y dando profundidade. Lê mais como galho seco ou gorgônia do que como coral de recife, exatamente como o agente disse de si mesmo.
+
+**Mas o orgânico está na silhueta, não na superfície.** É uma chapa de 40 mm recortada com contorno ramificado e ondulada num eixo. As famílias de gerador da seção 4 do PRD — casca relaxada com âncoras, malha inflada, dupla curvatura — são sobre a **superfície** ser orgânica. Isto é gráfico orgânico extrudado: resolve a divisória como produto, e **não exercita a arquitetura que o PRD aposta**.
+
+### Autoavaliação do agente: acurada, inclusive no estético
+
+> "A silhueta ainda lê mais como árvore ramificada do que como coral. (…) não é um coral convincente. Vi só a vista frontal da silhueta e uma perspectiva com auto-zoom, então a impressão visual é subjetiva."
+
+Declarou o que não verificou (posição dos vazados, se a chapa fica de pé), a fragilidade estrutural da base (barra de ~130 mm), as premissas que adotou (espessura 40 mm, origem) e que usou **semente fixa, logo reproduzível**. Oitava saída seguida de relato fiel — e a primeira em que ele julga a própria forma como insuficiente tendo cumprido todas as medidas.
+
+### Consequências
+
+1. **Tipo de check por faixa** (`min`/`max` por eixo) é pré-requisito para tier orgânico. Sem ele, envelope máximo vira reprovação.
+2. **`check.py` precisa ler Mesh e SubD** antes de qualquer rodada com Kangaroo.
+3. **A rota `gh_*` não vai aparecer sozinha.** 350 chamadas, zero uso. Se a arquitetura do PRD depende dela, precisa de template no `gh-templates/` e de menção explícita na skill — hoje a skill manda usar "template já existente", e não existe nenhum.
+4. **Custo de forma orgânica: ~US$ 0,58** contra ~US$ 0,17 de uma primitiva. Relevante para o guardrail de US$ 0,15 por pedido do PRD, que já estava apertado.
+
+---
+
 ## harness v2, rodada 6 — **PASSOU** · o boolean que derrubou a 3-bis
 
 - **Caso:** `caixa_furo_01` (tier fácil, único com boolean) · **Sessão:** `13a191fd` · linhas 316–330

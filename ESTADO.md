@@ -66,9 +66,21 @@ O caro não é modelar, é **compor**. Se isso se confirmar nos casos restantes,
 
 ---
 
+## Frente orgânica — aberta em 20/09 por sondagem
+
+Uma sondagem fora da série (sessão `25491602`, US$ 0,58) pediu uma divisória tipo coral. Entregou Brep sólido válido, ramificação convincente, envelope respeitado. Três consequências para o roteiro:
+
+1. **`check.py` precisa de check por faixa** (`min`/`max` por eixo). O briefing pedia "400 mm de profundidade **máxima**"; a peça deu 322,8 e o instrumento reprovou por comparar igualdade. **Geometria correta, veredito FALHOU** — pré-requisito de qualquer caso orgânico.
+2. **`check.py` precisa ler Mesh e SubD.** Hoje ignora tudo que não é Brep. A sondagem saiu como Brep por acaso da rota; Kangaroo relaxa malha.
+3. **A rota `gh_*` não aparece sozinha.** 350 chamadas registradas, **zero** de Grasshopper. A skill manda usar "template já existente" e `gh-templates/` está vazio. Se a arquitetura do PRD depende disso, precisa de template e de menção explícita.
+
+**Achado de fundo:** a peça é orgânica **na silhueta**, não na superfície — chapa recortada e ondulada. As famílias de gerador do PRD (casca relaxada, malha inflada, dupla curvatura) são sobre a superfície. Resolve a divisória como produto e não exercita a arquitetura apostada.
+
+**Custo:** US$ 0,58 contra ~US$ 0,17 de uma primitiva. O guardrail do PRD é US$ 0,15 por pedido.
+
 ## Em voo
 
-- Nada. A skill está estável em `21a31ea` e as três últimas rodadas foram registradas.
+- Nada. A skill está estável em `21a31ea` e as rodadas estão registradas.
 
 ## Fechado nesta sessão
 
