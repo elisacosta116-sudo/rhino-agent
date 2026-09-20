@@ -130,7 +130,13 @@ O que ele faz, em ordem, e por que cada passo existe:
 | 7 | mede com `check.py` | a fonte de verdade é o arquivo, não o relato |
 | 8 | registra no `historico` do caso e imprime bloco para o `NOTAS.md` | registro escrito à mão é registro que se perde |
 
-### 3.3 As três saídas possíveis
+### 3.3 Casos de recusa (tier borda)
+
+Alguns casos são feitos para o agente **não** entregar geometria: dimensão impossível, pedido ambíguo, topologia fora do catálogo. Eles trazem `espera_recusa: true` e uma lista `sinais_de_recusa` no `cases.jsonl`, e o runner julga por outro caminho — sem `.3dm`, sem `check.py`.
+
+Nesses casos, **produzir arquivo é a falha**. E há uma diferença que o instrumento sozinho não resolve: recusar com critério não é a mesma coisa que desistir. Por isso "parou sem dizer por quê" vira `INCONCLUSIVO`, e `INCONCLUSIVO` **nunca conta como aprovação** — o runner imprime o relato e a decisão é sua.
+
+### 3.4 As três saídas possíveis
 
 **`ANULADA`** — o agente não tocou no Rhino. Não é falha do modelo. O runner imprime as três causas conhecidas em ordem de frequência: Rhino fechado ou `mcpstart` não confirmado; `CLAUDE.md` contaminando o papel do agente; o agente parou para perguntar algo. Corrija e rode de novo — não registre como falha.
 
@@ -138,7 +144,7 @@ O que ele faz, em ordem, e por que cada passo existe:
 
 **Veredito do `check.py`** — `PASSOU`, `FALHOU` ou `INCONCLUSIVO`. O `INCONCLUSIVO` aparece quando o arquivo não tem malha de render: aí a caixa medida é só um **limite superior**, e dá para reprovar por falta, nunca por excesso. `INCONCLUSIVO` não é aprovação.
 
-### 3.4 Depois: registrar
+### 3.5 Depois: registrar
 
 O runner imprime um bloco markdown pronto. Cole no `NOTAS.md` e complete **as duas linhas que ele deixa em branco de propósito**:
 

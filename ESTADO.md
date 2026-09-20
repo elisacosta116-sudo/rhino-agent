@@ -11,11 +11,11 @@
 
 **Parar de mexer na skill e ampliar o dataset.** A fila de candidatas ficou sem item de evidência forte, e as três últimas rodadas mostram por quê: **o `balcao_01` já é resolvido, e um caso só não distingue regra de acaso.**
 
-Dois passos, nesta ordem:
-
-**1. Consertar o instrumento para o tier de borda.** Campo `espera_recusa` no caso; o runner passa a distinguir recusa correta de falha. Hoje os dois são indistinguíveis — ambos dão "nenhum `.3dm` novo". São ~30 linhas em `evals/rodada.py`. Sem isso, 6 dos 30 casos do PRD não são avaliáveis, e não vale escrever caso que o instrumento não julga.
+~~**1. Consertar o instrumento para o tier de borda.**~~ **Feito.** `espera_recusa` + `sinais_de_recusa` no caso, julgados por `julga_recusa()` em `evals/rodada.py`. Cinco ramificações testadas; desistir cai em `INCONCLUSIVO`, não em `PASSOU`. Primeiro caso escrito: `impossivel_01`, **ainda não rodado**.
 
 **2. Escrever o tier fácil — 12 primitivas com volume analítico.** Caixa, cilindro, tubo, cunha, anel. É onde se descobre se o agente usa a superfície tipada sem cair em script, que é a aposta central da arquitetura do PRD. Rodar o lote responde também a pergunta que trava a candidata nº 12: se 25 tool calls é o número certo.
+
+**3. Rodar `impossivel_01`** — exercita o instrumento novo numa rodada real e vale como primeiro dado do tier borda.
 
 ⚠️ **A baseline anterior a 20/09 não é comparável.** As rodadas 1–4 rodaram sem percepção. Detalhe em `NOTAS.md`, seção "HARNESS v2".
 

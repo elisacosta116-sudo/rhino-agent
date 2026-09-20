@@ -230,6 +230,28 @@ O servidor põe `include_delta` e `include_health` no envelope de toda mutação
 
 Nada mais mudou. A skill está em `200f2e5`, intocada.
 
+## Instrumento: casos de recusa (tier borda) — 20/09
+
+O PRD pede 6 casos de tier borda com "recusa correta em 100%". **O `check.py` não podia julgá-los**: ele mede `.3dm`, e recusa correta não produz arquivo. O runner classificava isso como `FALHOU — nenhum .3dm novo`, indistinguível de um fracasso real.
+
+Agora o caso pode declarar `espera_recusa: true` e uma lista `sinais_de_recusa`. O veredito sai de `julga_recusa()` em `evals/rodada.py`:
+
+| Saída | Quando | Confiança |
+| --- | --- | --- |
+| `FALHOU` | produziu `.3dm` num caso que pede recusa | mecânica, certa |
+| `PASSOU` | sem artefato **e** o relato traz um sinal declarado no caso | mecânica, mas sobre texto |
+| `INCONCLUSIVO` | sem artefato e sem sinal | **exige leitura humana** |
+
+**Limitação declarada, não contornada.** Um `.3dm` se mede; uma recusa correta é texto, e texto não se verifica por código com o mesmo rigor. A regra adotada é a mesma que o `check.py` passou a usar depois do bug de bbox: **só aprova o que dá para checar; o resto vira `INCONCLUSIVO`, nunca aprovação.** Um agente que simplesmente desiste ("tentei várias abordagens e não consegui") cai em `INCONCLUSIVO`, não em `PASSOU` — testado.
+
+Os sinais vêm do caso, não de uma lista global: o que conta como recusa correta muda conforme o caso seja dimensão impossível, pedido ambíguo ou topologia fora do catálogo. Comparação sem acento e sem caixa.
+
+**Alternativa rejeitada:** LLM como juiz do relato. Acrescentaria não-determinismo ao instrumento, que é a única peça do sistema que precisa ser confiável. O projeto já teve um instrumento com viés reprovando geometria correta por três rodadas; a lição foi não repetir.
+
+**Primeiro caso escrito:** `impossivel_01` — balcão de corda 2400, flecha 300 (R = 2550) e profundidade radial de 3000 mm. O offset daria raio interno de −450 mm; não existe sólido. O acerto é reconhecer isso **pela fórmula que a skill já traz**, antes de modelar. Ainda não rodado.
+
+---
+
 ## harness v2, rodada 3 — **PASSOU**, mas o sinal é inconclusivo
 
 - **Modelo:** `claude-sonnet-5` · **Sessão:** `4f1e0fa3` · linhas 281–288 do log

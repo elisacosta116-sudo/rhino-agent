@@ -146,6 +146,55 @@ def mede(arquivo, check):
                 "stdout": proc.stdout[:1000], "stderr": proc.stderr[:1000]}
 
 
+def julga_recusa(caso, arquivo_novo_nome, relato):
+    """Veredito de um caso de tier borda, onde o acerto e' NAO produzir geometria.
+
+    Aqui o instrumento e' estruturalmente mais fraco que nos casos de medida. Um
+    .3dm se mede; uma recusa correta e' texto, e texto nao se verifica por codigo
+    com o mesmo rigor. O projeto ja pagou caro por instrumento com vies (ver o
+    aviso no topo de NOTAS.md), entao a regra aqui e': **so' aprova o que da'
+    para checar mecanicamente; o resto vira INCONCLUSIVO, nunca aprovacao.**
+
+      FALHOU        produziu artefato num caso que pedia recusa. Mecanico e certo.
+      PASSOU        sem artefato E o relato traz um dos sinais declarados no caso.
+      INCONCLUSIVO  sem artefato e sem sinal: parou, mas nao da' para dizer se
+                    recusou com criterio ou so' desistiu. Exige leitura humana.
+
+    `sinais_de_recusa` vem do proprio caso, nao de uma lista global: o que conta
+    como recusa correta muda com o caso (dimensao impossivel, pedido ambiguo,
+    topologia fora do catalogo). Comparacao sem acento e sem caixa, porque o
+    relato varia na forma e nao no conteudo.
+    """
+    if arquivo_novo_nome:
+        return ("FALHOU",
+                f"produziu output/{arquivo_novo_nome} num caso que pede recusa",
+                None)
+
+    sinais = caso.get("sinais_de_recusa") or []
+    plano = _sem_acento(relato)
+    for s in sinais:
+        if _sem_acento(s) in plano:
+            return ("PASSOU", f"recusou e sinalizou: {s!r}", s)
+
+    if not sinais:
+        return ("INCONCLUSIVO",
+                "o caso nao declara `sinais_de_recusa` — sem criterio para julgar",
+                None)
+    return ("INCONCLUSIVO",
+            "nao criou artefato, mas o relato nao traz nenhum sinal de recusa "
+            f"declarado ({len(sinais)} procurados) — pode ter desistido em vez "
+            "de recusar. Leia o relato abaixo.",
+            None)
+
+
+def _sem_acento(s):
+    import unicodedata
+    return "".join(
+        c for c in unicodedata.normalize("NFD", s.lower())
+        if unicodedata.category(c) != "Mn"
+    )
+
+
 def bloco_notas(reg, caso):
     """Markdown pronto para colar em NOTAS.md. Escrever a mao e' onde se perde registro."""
     med = reg.get("medido") or {}
@@ -242,6 +291,39 @@ def main():
 
     depois = estado_das_saidas()
     novo = arquivo_novo(antes, depois)
+
+    if alvo.get("espera_recusa"):
+        veredito_r, motivo, sinal = julga_recusa(alvo, novo, r.get("result") or "")
+        print("\n" + "=" * 62)
+        print(f"{veredito_r} — caso de recusa. {motivo}")
+        print("=" * 62)
+        registro = {
+            "rodada": int(rotulo) if rotulo.isdigit() else rotulo,
+            "modelo": a.model or "(settings.json)",
+            "sessao": (r.get("session_id") or "")[:8],
+            "tipo": "recusa",
+            "resultado": veredito_r,
+            "motivo_do_veredito": motivo,
+            "sinal_encontrado": sinal,
+            "artefato": f"output/{novo}" if novo else None,
+            "tool_calls_mcp": tool_calls,
+            "num_turns": num_turns,
+            "duration_ms": r.get("duration_ms"),
+            "custo_usd": r.get("total_cost_usd"),
+            "medido_em": datetime.datetime.now().isoformat(),
+        }
+        print("\n" + "-" * 62)
+        print("RELATO DO AGENTE — leia antes de aceitar o veredito")
+        print("-" * 62)
+        print(r.get("result") or "(o agente nao devolveu texto)")
+        if a.dry_run:
+            print("\n-- --dry-run: cases.jsonl nao foi alterado")
+        else:
+            alvo.setdefault("historico", []).append(registro)
+            grava_casos(casos)
+            print(f"\n-- registrado no historico de '{alvo['id']}'")
+        sys.exit(0 if veredito_r == "PASSOU" else 1)
+
     if novo is None:
         print("\n" + "=" * 62)
         print("FALHOU — rodada valida, mas nenhum .3dm novo em output/.")
