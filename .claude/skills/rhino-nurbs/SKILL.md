@@ -24,7 +24,7 @@ Unidade padrão: milímetros. Z é vertical. Origem (0,0,0) é o centro da base 
 **3. Escolher a rota de menor risco**, nesta ordem de preferência:
 - Template Grasshopper parametrizado já existente (só ajustar sliders).
 - Tools nativas do MCP para primitivas e operações comuns.
-- Comando nativo do Rhino.
+- Comando nativo do Rhino, via `run_command`. **Sempre com o prefixo de traço:** `_-Arc`, `_-SaveAs`, `_-Layer`. Sem o traço o comando pede a entrada pela interface em vez de executar — abre diálogo, ou fica pendurado esperando cliques no viewport. Quando isso acontece ele **engole as chamadas seguintes e não pode ser cancelado pelo MCP**: só com `Esc` humano no Rhino. Se um `run_command` voltar sem efeito e o seguinte também, é isso — pare e reporte, não insista.
 - Script RhinoCommon/rhinoscriptsyntax curto. Use apenas quando as opções acima não resolverem, e mantenha o script abaixo de 40 linhas.
 
 **4. Construir em passos pequenos.** Uma operação lógica por chamada. Nomeie cada objeto (`nome_funcao_v1`) e coloque-o em camada explícita.
