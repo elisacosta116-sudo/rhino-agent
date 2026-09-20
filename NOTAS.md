@@ -230,6 +230,50 @@ O servidor põe `include_delta` e `include_health` no envelope de toda mutação
 
 Nada mais mudou. A skill está em `200f2e5`, intocada.
 
+## harness v2, rodada 4 — **PASSOU** · primeiro caso do tier fácil
+
+- **Caso:** `prisma_hex_01` (tier fácil, estreia do dataset ampliado) · **Sessão:** `5f7984fe` · linhas 289–305
+- **24 turnos, 17 tool calls** (orçamento 12, estouro de 42%), **44,7 s**, **US$ 0,2692**
+- **Veredito: PASSOU.** `output/totem_prisma_hex_v1.3dm`, salvo pelo agente, 1 Brep, arquivo limpo.
+
+```
+bbox      800,0 × 692,8 × 700,0      exatamente o esperado
+volume    290.984.531                desvio 0,00016% do analítico
+camada    ESTANDE::Totem             is_solid · 8 faces · 0 arestas nuas
+```
+
+A orientação declarada no pedido ("dois vértices sobre o eixo X") foi respeitada — vértices em 0°, 60°, … 300°. Sem essa frase no caso, a bbox alternaria entre 800 × 692,8 e 692,8 × 800.
+
+**Calibração do instrumento:** este é caso planar, e a malha de render bateu com o analítico em 0,00016%. Confirma que a tolerância de 0,5% para planares é folgada com sobra. A dos curvos (2%) continua sem calibração — precisa de uma rodada de cilindro ou esfera.
+
+### 🔎 Armadilha de API encontrada: `get_or_set_current_layer` falha em silêncio
+
+| Chamada | Entrada | Retorno |
+| --- | --- | --- |
+| 5 | `get_or_set_current_layer {"name": "ESTANDE::Totem"}` | `"Current layer: Default"` — **sem erro** |
+| 7 | `get_or_set_current_layer {"name": "Totem"}` | `"Current layer: Totem"` — funciona com o **nome da folha** |
+| 13 | `update_object_attributes {"layer": "ESTANDE::Totem"}` | funciona com o **caminho completo** |
+
+A tool aceita só o nome da folha para definir a camada atual. Com caminho hierárquico ela **não define nada e devolve uma string que parece sucesso** — `"Current layer: Default"` é uma resposta bem-formada, indistinguível de uma leitura. Quem não comparar o retorno com o que pediu segue achando que funcionou.
+
+### ⚠️ Isso corrige a leitura das rodadas de Haiku
+
+Estava registrado: *"Nenhuma rodada de Haiku acertou a camada. O Sonnet acertou na primeira."* **Verdadeiro e incompleto.**
+
+O log mostra que a **rodada 1** chamou `get_or_set_current_layer` com `RECEPÇÃO::Balcão` duas vezes, recebeu `"Current layer: Default"` nas duas, e nunca usou `update_object_attributes`. E mostra que **o Sonnet caiu na mesma armadilha em v2r1 e v2r4** — a primeira chamada devolveu `Default` igualmente.
+
+**A armadilha pega os dois modelos.** O que separa não é conhecer camadas hierárquicas: é conferir o retorno contra o que se pediu. Reforça a conclusão já registrada de que o modo de falha do Haiku é de **verificação/julgamento**, e enfraquece a leitura de que ele "não sabia criar camada".
+
+**Ressalva:** no log da rodada 1 o nome aparece como `RECEPÃ‡ÃƒO::BalcÃ£o` — mojibake de UTF-8 lido como latin-1. O hook só ganhou tratamento utf-8 no commit `200f2e5`, depois daquela rodada, então é **provável** que seja artefato de log e não do que foi enviado. Não dá para afirmar com o registro disponível.
+
+### Relato do agente vs medido
+
+Bate item a item, incluindo o volume com 8 dígitos. Declarou as premissas (altura em +Z a partir de Z=0; "raio circunscrito" como distância do centro ao vértice), **declarou a própria falha de camada e o contorno**, e confirmou o arquivo em disco com tamanho. Quinta rodada seguida de relato fiel.
+
+**Hipótese de causa do estouro de orçamento (17 contra 12):** três das chamadas extras vêm do contorno da armadilha de camada (5, 6, 7 mais a 12 e 13 de conferência e correção). O orçamento de 12 foi estimado sem saber disso. É dado para a candidata nº 12: parte do estouro é custo de contornar a superfície, não desperdício do modelo.
+
+---
+
 ## Instrumento: casos de recusa (tier borda) — 20/09
 
 O PRD pede 6 casos de tier borda com "recusa correta em 100%". **O `check.py` não podia julgá-los**: ele mede `.3dm`, e recusa correta não produz arquivo. O runner classificava isso como `FALHOU — nenhum .3dm novo`, indistinguível de um fracasso real.

@@ -17,17 +17,22 @@
 
 **3. Rodar `impossivel_01`** — exercita o instrumento novo numa rodada real e vale como primeiro dado do tier borda.
 
+**Calibrar a tolerância dos casos curvos.** O `prisma_hex_01` (planar) bateu com o analítico em 0,00016%, confirmando que 0,5% é folgado para planares. Os curvos estão em 2% por precaução contra o facetamento da malha de render, **e isso ainda não foi medido** — a primeira rodada de `cilindro_01` ou `esfera_01` dá o número real, e aí dá para apertar.
+
 ⚠️ **A baseline anterior a 20/09 não é comparável.** As rodadas 1–4 rodaram sem percepção. Detalhe em `NOTAS.md`, seção "HARNESS v2".
 
 ## Placar da série harness v2
 
-| Rodada | Variável testada | Veredito | Chamadas | Custo |
-|---|---|---|---|---|
-| v2r1 | percepção do servidor ligada | FALHOU — sem artefato (geometria passava) | 27 | US$ 0,53 |
-| v2r2 | salvar vira passo 6 do fluxo | **PASSOU** | 36 | US$ 0,54 |
-| v2r3 | prefixo de traço em `run_command` | **PASSOU** — sinal inconclusivo (amostra de 1) | 8 | US$ 0,22 |
+| Rodada | Caso | Variável testada | Veredito | Chamadas | Custo |
+|---|---|---|---|---|---|
+| v2r1 | `balcao_01` | percepção do servidor ligada | FALHOU — sem artefato (geometria passava) | 27 | US$ 0,53 |
+| v2r2 | `balcao_01` | salvar vira passo 6 do fluxo | **PASSOU** | 36 | US$ 0,54 |
+| v2r3 | `balcao_01` | prefixo de traço em `run_command` | **PASSOU** — sinal inconclusivo | 8 | US$ 0,22 |
+| v2r4 | `prisma_hex_01` | estreia do tier fácil | **PASSOU** | 17 | US$ 0,27 |
 
-**2 de 3.** Continua sendo **1 caso de eval de 30** — não é taxa de aprovação, e é exatamente por isso que a próxima ação é ampliar.
+**3 de 4, em 2 casos de 13 escritos.** Ainda não é taxa de aprovação: 11 casos nunca rodaram.
+
+**Orçamento estourado em 3 de 4 rodadas** (27/25, 36/25, 17/12). Na v2r4 parte do estouro é contornar a armadilha de camada — custo da superfície, não desperdício do modelo.
 
 **Variância de rota, mesmo prompt e mesma skill:** v2r1 foi tipada, v2r2 misturou tudo, v2r3 fez um script só. Em nenhuma o agente seguiu a ordem de preferência declarada na skill.
 

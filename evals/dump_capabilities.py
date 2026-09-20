@@ -75,6 +75,11 @@ Nunca invente nome de tool nem assinatura de metodo. Se nao esta nesta lista,
 nao existe. Para scripts em Python, consulte `get_rhinoscript_docs` antes de
 escrever. **Nao existe consulta equivalente para C#** — ver `references/rhinocommon.md`.
 
+> **Esta lista diz o que existe, nao como cada tool se comporta.** Comportamentos
+> que a descricao das tools nao conta e que ja produziram falha medida estao em
+> `references/armadilhas-mcp.md` — entre eles uma tool de camada que falha em
+> silencio. Leia antes de confiar no retorno de qualquer chamada.
+
 ## Verificacao embutida (envelope de percepcao)
 
 {perc.get('description', '')}

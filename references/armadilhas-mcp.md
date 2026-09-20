@@ -1,0 +1,82 @@
+# Armadilhas medidas do servidor MCP
+
+Comportamentos que **não estão na descrição das tools** e que já produziram falha
+registrada. Todos medidos em `logs/rhino_calls.jsonl`, com a sessão citada.
+
+Escrito à mão. Não confundir com `mcp-superficie.md`, que é gerado por script e
+se reescreve inteiro a cada regeneração.
+
+---
+
+## `get_or_set_current_layer` falha em silêncio com caminho hierárquico
+
+Aceita **só o nome da folha**. Com o caminho completo ela não define nada e
+devolve uma string bem-formada que parece sucesso:
+
+```
+get_or_set_current_layer {"name": "ESTANDE::Totem"}  ->  "Current layer: Default"   <- NÃO definiu
+get_or_set_current_layer {"name": "Totem"}           ->  "Current layer: Totem"     <- definiu
+```
+
+**Para pôr um objeto na camada certa, use `update_object_attributes`**, que aceita
+o caminho completo e devolve o `full_path` do resultado:
+
+```
+update_object_attributes {"id": "...", "layer": "ESTANDE::Totem"}    <- funciona
+```
+
+**Por que isso importa mais do que parece.** O retorno `"Current layer: Default"`
+é indistinguível de uma leitura bem-sucedida. Não há erro, não há flag. Quem não
+comparar o retorno com o que pediu segue achando que a camada foi definida.
+
+Medido nas sessões `04c4c2d1` (rodada 1, Haiku), `e5143ceb` (v2r1, Sonnet) e
+`5f7984fe` (v2r4, Sonnet). **Pega os dois modelos.** A rodada 1 não conferiu o
+retorno e entregou o objeto em `Default` — a falha de camada que ficou três
+rodadas atribuída a desleixo do modelo. As outras conferiram e corrigiram.
+
+> Regra geral que este caso ilustra: **compare o retorno de toda tool com o que
+> você pediu.** Sucesso aparente não é sucesso.
+
+---
+
+## O envelope de percepção não chega em toda mutação
+
+Com `RHINO_MCP_PERCEPTION=1`, o servidor põe `include_health` e `include_delta`
+no envelope de **todas** as chamadas (`server.py:547`), mas o plugin dentro do
+Rhino só honra em algumas.
+
+Medido na v2r1 (`e5143ceb`): **2 de 27** respostas trouxeram o envelope —
+`execute_rhinoscript_python_code` e `update_object_attributes`. Não trouxeram:
+`create_object`, `offset_curve`, `extrude_curve`, `delete_object`,
+`create_layer`, `modify_object`.
+
+**Nenhuma tool de criação de geometria honra o envelope.** Não conte com ele
+como rede de verificação; use `analyze_objects` explicitamente.
+
+---
+
+## `run_command` sem prefixo de traço abre a interface e trava a sessão
+
+`_Arc` abre o comando interativo e fica esperando cliques no viewport; `_-Arc`
+executa direto. O mesmo vale para `_-SaveAs`, `_-Layer`, `_-Properties`.
+
+Quando um comando interativo fica pendurado, ele **engole as chamadas seguintes
+e não pode ser cancelado pelo MCP** — exige `Esc` humano no Rhino.
+
+Medido em `6fd25973` (v2r2): um `_Arc` sem traço travou a sessão e engoliu o
+`_-SaveAs` seguinte; o agente só entregou porque detectou que o save não
+acontecera e refez por outra rota. Em `dcf27bed` (3-bis) um `SaveAs` sem traço
+não gerou arquivo nenhum e o agente declarou o arquivo como gerado.
+
+Em 35 chamadas de `run_command` nas seis primeiras rodadas, **4 usaram o traço**.
+
+---
+
+## `analyze_objects` devolve só o nome da folha da camada
+
+O campo `layer` traz `"Mobiliario"`, não `"ESTANDE::Mobiliario"`. Isso parece
+camada errada e não é. Para o caminho completo, use `get_object_attributes`, que
+devolve `layer.full_path`.
+
+Medido em `e5143ceb` (v2r1): o relato do agente pareceu indicar camada plana, e
+o `check.py` sobre o arquivo mostrou a hierárquica correta.
