@@ -4,3 +4,8 @@ output/
 __pycache__/
 .env
 .env.*
+
+# Artefatos do subagent-driven-development, se ele rodar sobre esta arvore via
+# --add-dir. Arvore suja quebra o Passo 0 do protocolo: rodada sobre arvore
+# suja nao e' atribuivel a commit nenhum.
+.superpowers/
