@@ -120,7 +120,37 @@ uv run --with rhino3dm python evals/rodada.py balcao_01 --model sonnet
 
 Ele arquiva os `.3dm` atuais, anota o marco do log, escreve o orçamento para o hook de guarda, chama o agente com o prompt literal do caso, **valida se foi rodada** antes de ler qualquer resultado, acha o arquivo novo, mede com o `check.py`, registra no histórico do caso e imprime o bloco do `NOTAS.md`.
 
-Opções: `--rodada <rótulo>` para nomear (default: próximo número), `--dry-run` para rodar e medir sem escrever no `cases.jsonl`, `--timeout <s>` (default 1800).
+Opções: `--rodada <rótulo>` para nomear (default: próximo número), `--dry-run` para rodar e medir sem escrever no `cases.jsonl`, `--timeout <s>` (default 1800), `--sem-jev` para desligar o segundo leitor nos casos de recusa.
+
+**Caso de recusa (tier borda)** tem um segundo leitor e pede uma dependência a mais:
+
+```bash
+uv run --with rhino3dm --with typesafe-sdk python evals/rodada.py impossivel_01 --model sonnet
+```
+
+Sem `typesafe-sdk` ou sem `TYPESAFE_API_KEY` a rodada roda igual, com o campo `jev` marcado como indisponível. **Nenhuma falha desse leitor derruba a rodada** — é opcional por construção.
+
+**Passo 2-bis — configure a chave, uma vez só** (só para o tier borda). No **cmd.exe**, não no PowerShell — o PSReadLine grava histórico em disco, o cmd não:
+
+```
+setx TYPESAFE_API_KEY "sua-chave"
+```
+
+Grava no ambiente de usuário do Windows: vale para Git Bash, PowerShell e cmd, e sobrevive a reboot. Rodar de novo **sobrescreve**, sem flag nenhuma. Duas armadilhas: (1) terminais já abertos mantêm o valor antigo — abra um novo, e reinicie o Claude Code se quiser que ele veja; (2) um `export` feito antes na sessão do Git Bash **ganha do `setx`** naquele terminal, até ele morrer.
+
+Conferir qual está valendo, sem expor a chave:
+
+```bash
+echo "len=${#TYPESAFE_API_KEY}  fp=$(echo -n "$TYPESAFE_API_KEY" | sha256sum | cut -c1-8)"
+```
+
+Para remover de vez — `setx VAR ""` **não remove**, deixa a variável vazia:
+
+```
+reg delete "HKCU\Environment" /v TYPESAFE_API_KEY /f
+```
+
+**A chave nunca vai para arquivo do repositório.** O `.claude/settings.json` é rastreado e o repositório é público; `.env` e `.env.*` estão no `.gitignore` por precaução.
 
 **Passo 3 — leia o veredito.** `PASSOU` / `FALHOU` / `INCONCLUSIVO`, mais os dois casos que o runner detecta antes de medir:
 
@@ -129,6 +159,8 @@ Opções: `--rodada <rótulo>` para nomear (default: próximo número), `--dry-r
 | `ANULADA` | 0 tool calls ou 1 turno — o agente não tocou no Rhino. **Não é falha do modelo.** |
 | `FALHOU`, sem arquivo | rodada válida, nenhum `.3dm` novo. Sem artefato não há entrega. |
 | `INCONCLUSIVO` | arquivo sem malha de render: a caixa medida é limite superior. **Não é aprovação.** |
+
+Num caso de recusa sai também o bloco **SEGUNDO LEITOR (Jev)**, com três probabilidades e, quando os dois leitores discordam, uma observação. **Ele não altera o veredito acima** — e a que mais importa é `DIVERGENCIA FORTE`, que significa suspeita de falso `PASSOU`: o sinal casou por substring, possivelmente dentro de uma negação. Nesse caso leia o relato antes de aceitar a aprovação. Por que ele existe, e o viés que motivou: `NOTAS.md`, seção de 21/09.
 
 **Passo 4 — registre.** Cole o bloco impresso no `NOTAS.md` e complete as duas linhas que ele deixa em branco: **relato do agente vs medido**, e hipótese de causa. Essa coluna de contraste é o produto da série inteira — foi o que separou "erro de medição" de "erro de julgamento".
 

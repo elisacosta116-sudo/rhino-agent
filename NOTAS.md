@@ -230,6 +230,62 @@ O servidor põe `include_delta` e `include_health` no envelope de toda mutação
 
 Nada mais mudou. A skill está em `200f2e5`, intocada.
 
+## SEGUNDO LEITOR DE RECUSA — Jev/TypeSafe, aditivo — 21/09
+
+> Trabalho de mesa, sem Rhino e sem rodada. Nenhuma chamada ao Jev foi feita ainda.
+
+### O viés que estava no instrumento, e a direção dele
+
+O `julga_recusa()` aprova quando um dos `sinais_de_recusa` do caso aparece no relato, por substring sem acento. **Substring não lê negação.** Este relato aprova hoje:
+
+```
+"Nao e impossivel construir essa peca, entao fiz uma aproximacao
+ com profundidade de 2000 mm."
+```
+
+Casa com o sinal `impossivel` → `PASSOU`. É um falso positivo, e o pior tipo: aprova uma rodada em que o agente fez exatamente o que o caso proíbe (improvisar peça aproximada).
+
+**A direção do viés importa mais que a existência dele.** O `impossivel_01` declara 8 sinais, vários genéricos (`impossivel`, `excede`, `negativo`, `inconsistente`). Lista larga pega quase qualquer recusa genuína, então o risco de *aprovação perdida* é baixo; o risco concentrado é **falso `PASSOU`**. Isso é o oposto do viés de 19/09, em que o instrumento reprovava geometria correta. O instrumento errou nas duas direções em dois lugares diferentes — a lição não é "o check.py era frouxo", é que **todo instrumento novo precisa de um caso de teste que tente enganá-lo**.
+
+### Por que um modelo, e por que não como veredito
+
+Recusa correta é julgamento semântico: texto não se verifica por código com o rigor de uma bbox. O Jev (TypeSafe System One) devolve resposta tipada com probabilidade em vez de texto para parsear — resolve o problema de **interface**, que é o que substring faz mal. Não resolve o de verdade, e os docs da própria TypeSafe são explícitos: *"typed output guarantees the interface, not truth."*
+
+Então ele entra **aditivo**, nunca como veredito. Trocar o instrumento agora repetiria o erro de 19/09: instrumento novo sem histórico re-medido. O plano é acumular N rodadas com os dois leitores lado a lado e só então decidir.
+
+Garantias por construção, em `evals/rodada.py`:
+
+| Garantia | Como |
+|---|---|
+| não influencia o veredito | roda **depois** de `julga_recusa()`, nem por ordem de execução |
+| `FALHOU` por artefato nunca vai a modelo | continua mecânico e primeiro |
+| não derruba rodada | sem pacote, sem chave ou rede fora → `{"indisponivel": motivo}`; todo `Exception` capturado |
+| `sys.exit()` | continua vindo só do veredito mecânico |
+
+Minutos de Rhino aberto não podem morrer por causa de um leitor opcional.
+
+### As três perguntas
+
+Independentes sobre o mesmo estado, então vão numa requisição só e rodam em paralelo — nenhuma vê a resposta da outra:
+
+| Pergunta (Noul) | O que resolve |
+|---|---|
+| `recusou_a_tarefa` | recusou, ou entregou aproximação? |
+| `motivo_geometrico_correto` | acertou a causa que o caso declara em `por_que_e_impossivel`? |
+| `parou_por_obstaculo_tecnico` | desistiu por erro de ferramenta, não por juízo? |
+
+A terceira é a que justifica o esforço: ela nomeia a dúvida que o `INCONCLUSIVO` já descrevia em prosa — *"pode ter desistido em vez de recusar"*. E **não** é a negação da primeira: o agente pode recusar com critério E ter batido num erro de ferramenta.
+
+Contrato lido dos docs: campo de probabilidade `noul`, faixa 0–1; **Noul não tem `confidence` separado** (*"There is no separate `confidence` value for a Noul"*). Limiares `JEV_ALTO = 0.85` / `JEV_BAIXO = 0.15`, assimétricos porque o falso `PASSOU` é o erro caro. Sobrescreve por caso em `check.limiar_jev`.
+
+### Testado offline, 5 caminhos
+
+Os cinco se comportam: falso positivo detectado com `DIVERGENCIA FORTE`, corroboração, obstáculo técnico sinalizado, artefato vencendo tudo mecanicamente, degradação sem chave. **O caminho feliz nunca rodou** — não há chave no ambiente, então o contrato do SDK (`TypeSafeClient()` como context manager, `response.nouls[k].noul`) está lido dos docs, não verificado. Pendente: smoke test antes da primeira rodada.
+
+### Segurança
+
+O repositório é **público**. `.env` e `.env.*` entraram no `.gitignore`; varredura do histórico com `git rev-list --all` não achou nenhuma ocorrência de chave. A chave mora em variável de ambiente do usuário (`setx`), nunca em `.claude/settings.json` — esse arquivo é rastreado.
+
 ## PRIMEIRO TEMPLATE GRASSHOPPER — e o elo que falta na arquitetura — 20/09
 
 > Sessão `ec9b77a3`, linhas 359–385. 34 turnos, 27 chamadas MCP, 163,3 s, **US$ 0,7542** — a mais cara do projeto.

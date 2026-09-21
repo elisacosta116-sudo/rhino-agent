@@ -75,6 +75,19 @@ Sem evals, não dá para saber se uma mudança na skill melhorou ou piorou o age
 
 Rode cada caso em modo headless (`claude -p "<prompt>" --output-format json`), consulte a geometria resultante pelo MCP e compare com o `check`. Registre a taxa de aprovação por tier, o número médio de tool calls e o custo. Monte 30 casos antes de mexer na skill; depois disso, toda alteração na skill passa pelo eval.
 
+### Dois instrumentos, porque há dois tipos de entrega
+
+| Tier | O que se mede | Instrumento | Rigor |
+|---|---|---|---|
+| fácil, médio, difícil | um `.3dm` | `check.py` com `rhino3dm` | **medição** — bbox, volume, `IsSolid`, camada |
+| borda (recusa) | um texto | `julga_recusa()` + leitor Jev aditivo | **julgamento** — estruturalmente mais fraco |
+
+A assimetria é real e não se resolve com esforço: um sólido se mede, uma recusa correta se interpreta. Daí a regra do tier borda — **só aprova o que dá para checar mecanicamente; o resto vira `INCONCLUSIVO`, nunca aprovação.**
+
+O leitor Jev (TypeSafe System One, três Nouls numa requisição) existe porque o instrumento mecânico é substring matching, e **substring não lê negação**: `"nao e impossivel, entao fiz uma aproximacao"` casa com o sinal `impossivel` e aprova. Ele entra **aditivo** — grava probabilidade ao lado do veredito, nunca decide — porque trocar instrumento sem histórico re-medido foi o erro de 19/09. A justificativa completa está em `NOTAS.md`, 21/09.
+
+Note onde isso cai na hierarquia da camada 5: um modelo julgando texto é mais fraco que configuração de servidor, e é por isso que ele não tem poder de veredito. A defesa mecânica do tier borda continua sendo *"produziu artefato num caso que pede recusa → `FALHOU`"*, que é código e não passa por modelo nenhum.
+
 ## Camada 5: defesas mecânicas
 
 As quatro camadas acima assumem que o modelo coopera. A evidência diz que não dá para assumir isso: a skill manda ler `get_modeling_guidance("verification")` no passo 5 desde o primeiro commit e, em **217 chamadas registradas, esse tópico nunca foi lido**. A regra "tolerância é binária" está escrita e o Haiku marcou OK com desvio de 585%.

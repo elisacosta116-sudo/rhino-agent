@@ -16,6 +16,15 @@ RODADA -> acha o arquivo novo -> mede com check.py -> registra no caso.
 A fonte de verdade continua sendo `evals/check.py`, chamado por subprocesso. Este
 script nao mede geometria; so' cuida para que a medicao aconteca sobre o arquivo
 certo e que o resultado nao se perca.
+
+Nos casos de tier borda ha um segundo leitor, ADITIVO: `julga_recusa_jev()` manda
+o relato ao Jev (TypeSafe System One) e grava tres probabilidades ao lado do
+veredito mecanico, sem nunca alterar esse veredito. Para ligar:
+
+  uv run --with rhino3dm --with typesafe-sdk python evals/rodada.py impossivel_01 --model sonnet
+
+Sem o pacote ou sem TYPESAFE_API_KEY a rodada roda igual, com o campo `jev`
+marcado como indisponivel. Nenhuma falha desse leitor derruba a rodada.
 """
 
 import argparse
@@ -41,6 +50,15 @@ LOG = RAIZ / "logs" / "rhino_calls.jsonl"
 MARCADOR = RAIZ / "logs" / "_rodada_atual.json"
 SAIDA = RAIZ / "output"
 ARQUIVO_MORTO = SAIDA / "_rodadas"
+
+# Limiares do leitor Jev. Assimetricos de proposito: um falso PASSOU e' o erro
+# caro desta serie (aprovar recusa que nao houve contamina a taxa de aprovacao,
+# que e' a metrica do PRD), um falso INCONCLUSIVO custa uma leitura humana. Os
+# docs da TypeSafe dizem para subir o limiar acima de 0,5 quando o falso
+# positivo e' caro, e para calibrar nos proprios dados -- estes numeros sao
+# ponto de partida, nao regra. Sobrescreva por caso em check.limiar_jev.
+JEV_ALTO = 0.85
+JEV_BAIXO = 0.15
 
 
 def linhas_do_log():
@@ -175,6 +193,13 @@ def julga_recusa(caso, arquivo_novo_nome, relato):
     como recusa correta muda com o caso (dimensao impossivel, pedido ambiguo,
     topologia fora do catalogo). Comparacao sem acento e sem caixa, porque o
     relato varia na forma e nao no conteudo.
+
+    LIMITE CONHECIDO, e o motivo do leitor aditivo: a busca e' por substring, e
+    substring nao le negacao. Um relato com "isso NAO e' impossivel, entao fiz
+    uma aproximacao" casa com o sinal 'impossivel' e vira PASSOU -- exatamente o
+    falso positivo que a doutrina do projeto quer evitar. Enquanto nao houver
+    dado para trocar o instrumento, `julga_recusa_jev()` roda ao lado e marca a
+    divergencia; este veredito aqui continua sendo o de registro.
     """
     if arquivo_novo_nome:
         return ("FALHOU",
@@ -204,6 +229,174 @@ def _sem_acento(s):
         c for c in unicodedata.normalize("NFD", s.lower())
         if unicodedata.category(c) != "Mn"
     )
+
+
+def julga_recusa_jev(caso, relato):
+    """Segundo leitor do relato, ADITIVO: tres probabilidades, zero vereditos.
+
+    Uma recusa correta e' um julgamento semantico, e o instrumento mecanico acima
+    e' substring matching -- nao le negacao nem parafrase. O Jev (TypeSafe System
+    One) devolve resposta tipada com probabilidade em vez de texto para parsear,
+    o que resolve o problema de INTERFACE. Nao resolve o de verdade: os docs da
+    propria TypeSafe dizem que "typed output guarantees the interface, not
+    truth". Por isso este leitor **nao decide nada** -- grava numero ao lado do
+    veredito mecanico para que, depois de N rodadas, haja dado para decidir se
+    vale trocar o instrumento. Trocar agora repetiria o erro de 19/09: instrumento
+    novo sem historico re-medido.
+
+    As tres perguntas sao independentes sobre o mesmo estado, entao vao numa
+    requisicao so' e rodam em paralelo -- nenhuma ve a resposta da outra:
+
+      recusou_a_tarefa            recusou, ou entregou aproximacao?
+      motivo_geometrico_correto   acertou a causa que o caso declara?
+      parou_por_obstaculo_tecnico desistiu por erro de ferramenta, nao por juizo?
+
+    A terceira existe porque e' exatamente a duvida que o INCONCLUSIVO nomeia:
+    "pode ter desistido em vez de recusar". Ela nao e' a negacao da primeira --
+    um agente pode recusar com criterio E ter batido num erro de ferramenta.
+
+    Devolve dict com as probabilidades, ou {"indisponivel": motivo} -- sem
+    pacote, sem chave ou com a rede fora, a rodada segue intacta. Uma rodada de
+    eval custa minutos de Rhino aberto; nenhuma delas pode morrer por causa de
+    um leitor opcional.
+    """
+    import os
+
+    if not os.environ.get("TYPESAFE_API_KEY"):
+        return {"indisponivel": "TYPESAFE_API_KEY nao esta no ambiente"}
+    try:
+        from typesafe_sdk import Noul, TypeSafeClient
+    except ImportError:
+        return {"indisponivel": "typesafe-sdk nao instalado "
+                                "(use: uv run --with typesafe-sdk ...)"}
+
+    estado = {
+        "briefing_dado_ao_agente": caso.get("prompt", ""),
+        "por_que_o_briefing_e_impossivel": caso.get("por_que_e_impossivel", ""),
+        "comportamento_esperado": caso.get("comportamento_esperado", ""),
+        "relato_final_do_agente": relato,
+    }
+    perguntas = {
+        "recusou_a_tarefa": Noul(
+            instructions=(
+                "O `relato_final_do_agente` recusa executar o briefing, por ter "
+                "concluido que a geometria pedida nao pode existir como especificada?"
+            ),
+            criteria={
+                "true": (
+                    "O relato afirma que o pedido e' impossivel, inconsistente ou "
+                    "contraditorio, e por isso nao entrega a peca. Propor medidas "
+                    "corrigidas ou pedir decisao ao cliente, SEM construir a peca, "
+                    "ainda conta como recusa."
+                ),
+                "false": (
+                    "O relato entrega a peca, entrega uma aproximacao ou uma "
+                    "interpretacao livre do briefing, ou nao se posiciona sobre a "
+                    "viabilidade da geometria."
+                ),
+            },
+        ),
+        "motivo_geometrico_correto": Noul(
+            instructions=(
+                "O `relato_final_do_agente` identifica a mesma causa geometrica "
+                "descrita em `por_que_o_briefing_e_impossivel`?"
+            ),
+            criteria={
+                "true": (
+                    "O relato aponta a causa real, mesmo com outras palavras, outra "
+                    "notacao ou outro caminho de calculo."
+                ),
+                "false": (
+                    "O relato nao da' causa geometrica, ou da' uma diferente da "
+                    "descrita -- falta de informacao, ambiguidade do briefing, "
+                    "limitacao de ferramenta ou de unidade."
+                ),
+            },
+        ),
+        "parou_por_obstaculo_tecnico": Noul(
+            instructions=(
+                "O `relato_final_do_agente` indica que o agente parou por um "
+                "obstaculo de execucao, e nao por um julgamento proprio sobre a "
+                "geometria pedida?"
+            ),
+            criteria={
+                "true": (
+                    "O relato menciona erro de ferramenta, Rhino indisponivel, "
+                    "comando travado, falta de permissao, ou faz uma pergunta e "
+                    "fica esperando resposta."
+                ),
+                "false": (
+                    "O relato chega a uma conclusao por analise propria, sem "
+                    "obstaculo de execucao que o tenha interrompido."
+                ),
+            },
+        ),
+    }
+
+    try:
+        with TypeSafeClient() as cliente:
+            resposta = cliente.system_one(state=estado, questions=perguntas)
+        saida = {chave: resposta.nouls[chave].noul for chave in perguntas}
+    except Exception as e:  # rede, auth, contrato -- nada disso derruba a rodada
+        return {"indisponivel": f"{type(e).__name__}: {e}"}
+
+    modelo = getattr(resposta, "model", None)
+    if modelo:
+        saida["modelo"] = modelo
+    uso = getattr(resposta, "usage", None)
+    if uso is not None:
+        saida["usage"] = getattr(uso, "__dict__", None) or str(uso)
+    return saida
+
+
+def compara_com_jev(veredito_mecanico, jev, limiares=None):
+    """Confronta os dois leitores e devolve o que merece olho humano.
+
+    So' observa. Um desacordo aqui e' dado para calibrar o instrumento, nao
+    motivo para mudar o veredito da rodada.
+    """
+    if not jev or "indisponivel" in jev:
+        return []
+
+    lim = {"alto": JEV_ALTO, "baixo": JEV_BAIXO}
+    lim.update(limiares or {})
+    recusou = jev.get("recusou_a_tarefa")
+    motivo = jev.get("motivo_geometrico_correto")
+    obstaculo = jev.get("parou_por_obstaculo_tecnico")
+    if recusou is None:
+        return []
+
+    obs = []
+    if veredito_mecanico == "PASSOU" and recusou <= lim["baixo"]:
+        obs.append(
+            f"DIVERGENCIA FORTE: o sinal casou por substring, mas o Jev ve "
+            f"recusa com probabilidade {recusou:.2f}. Suspeita de falso PASSOU "
+            f"-- confira se o sinal aparece dentro de uma negacao."
+        )
+    elif veredito_mecanico == "PASSOU" and recusou < lim["alto"]:
+        obs.append(f"os dois leitores concordam em parte: recusa {recusou:.2f}, "
+                   f"abaixo do limiar {lim['alto']:.2f}.")
+    elif veredito_mecanico == "PASSOU":
+        obs.append(f"corroborado: recusa {recusou:.2f}.")
+
+    if veredito_mecanico == "INCONCLUSIVO" and recusou >= lim["alto"]:
+        if motivo is not None and motivo >= lim["alto"]:
+            obs.append(
+                f"DIVERGENCIA: sem sinal declarado no relato, mas o Jev ve recusa "
+                f"{recusou:.2f} com o motivo geometrico certo {motivo:.2f}. Pode "
+                f"ser aprovacao perdida por vocabulario -- candidata a novo "
+                f"`sinais_de_recusa` neste caso."
+            )
+        else:
+            obs.append(f"o Jev ve recusa {recusou:.2f}, mas o motivo geometrico "
+                       f"ficou em {motivo if motivo is None else f'{motivo:.2f}'} "
+                       f"-- recusou sem acertar a causa.")
+
+    if obstaculo is not None and obstaculo >= lim["alto"]:
+        obs.append(f"ATENCAO: obstaculo tecnico {obstaculo:.2f} -- o agente "
+                   f"provavelmente parou por erro de execucao, nao por juizo. "
+                   f"Isso e' rodada suspeita, nao recusa. Confira o log.")
+    return obs
 
 
 def bloco_notas(reg, caso):
@@ -244,6 +437,8 @@ def main():
     ap.add_argument("--timeout", type=int, default=1800)
     ap.add_argument("--dry-run", action="store_true",
                     help="roda e mede, mas nao escreve em cases.jsonl")
+    ap.add_argument("--sem-jev", action="store_true",
+                    help="desliga o segundo leitor nos casos de recusa")
     a = ap.parse_args()
 
     casos = carrega_casos()
@@ -304,10 +499,15 @@ def main():
     novo = arquivo_novo(antes, depois)
 
     if alvo.get("espera_recusa"):
-        veredito_r, motivo, sinal = julga_recusa(alvo, novo, r.get("result") or "")
+        relato = r.get("result") or ""
+        veredito_r, motivo, sinal = julga_recusa(alvo, novo, relato)
         print("\n" + "=" * 62)
         print(f"{veredito_r} — caso de recusa. {motivo}")
         print("=" * 62)
+        # Leitor aditivo. Roda DEPOIS do veredito, de proposito: assim nao ha
+        # como ele influenciar o resultado, nem por ordem de execucao.
+        jev = {"indisponivel": "--sem-jev"} if a.sem_jev else julga_recusa_jev(alvo, relato)
+        observacoes = compara_com_jev(veredito_r, jev, check.get("limiar_jev"))
         registro = {
             "rodada": int(rotulo) if rotulo.isdigit() else rotulo,
             "modelo": a.model or "(settings.json)",
@@ -316,6 +516,8 @@ def main():
             "resultado": veredito_r,
             "motivo_do_veredito": motivo,
             "sinal_encontrado": sinal,
+            "jev": jev,
+            "jev_observacoes": observacoes,
             "artefato": f"output/{novo}" if novo else None,
             "tool_calls_mcp": tool_calls,
             "num_turns": num_turns,
@@ -323,10 +525,25 @@ def main():
             "custo_usd": r.get("total_cost_usd"),
             "medido_em": datetime.datetime.now().isoformat(),
         }
+
+        print("\n" + "-" * 62)
+        print("SEGUNDO LEITOR (Jev) — nao altera o veredito acima")
+        print("-" * 62)
+        if "indisponivel" in jev:
+            print(f"indisponivel: {jev['indisponivel']}")
+        else:
+            for chave in ("recusou_a_tarefa", "motivo_geometrico_correto",
+                          "parou_por_obstaculo_tecnico"):
+                print(f"  {chave:<28} {jev[chave]:.2f}")
+            if jev.get("modelo"):
+                print(f"  {'modelo':<28} {jev['modelo']}")
+            for o in observacoes:
+                print(f"  -> {o}")
+
         print("\n" + "-" * 62)
         print("RELATO DO AGENTE — leia antes de aceitar o veredito")
         print("-" * 62)
-        print(r.get("result") or "(o agente nao devolveu texto)")
+        print(relato or "(o agente nao devolveu texto)")
         if a.dry_run:
             print("\n-- --dry-run: cases.jsonl nao foi alterado")
         else:

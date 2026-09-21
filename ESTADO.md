@@ -3,7 +3,7 @@
 > **Atualize este arquivo ao fim de toda sessão.** É o primeiro que se lê ao voltar.
 > Formato fixo: não cresça o documento, substitua o conteúdo. Histórico fica em `NOTAS.md`.
 
-**Última sessão:** 20/09/2026 — sessão longa, 6 rodadas + 2 sondagens + 1 template
+**Última sessão:** 21/09/2026 — curta, trabalho de mesa: segundo leitor do tier borda, sem rodada
 
 ---
 
@@ -33,7 +33,8 @@ Isto é também o **gatilho para reavaliar o servidor MCP**, que estava condicio
 
 Trabalho pronto para seguir, em ordem de valor, **nenhum bloqueado**:
 
-1. **Rodar `impossivel_01`** — o instrumento de recusa foi escrito e testado em 5 ramificações, mas **nunca rodou numa rodada real**. Barato, e é o primeiro dado do tier borda. Precisa do Rhino com documento novo.
+0. **Smoke test do Jev, antes de qualquer rodada.** Uma chamada Noul mínima, centavos de token. O contrato do SDK está lido dos docs e **nunca exercitado** — `TypeSafeClient()` como context manager, `response.nouls[k].noul`. Se estiver diferente do documentado, é melhor descobrir aqui do que com o Rhino aberto. A chave já está configurada via `setx`; o Claude Code precisa de restart para vê-la.
+1. **Rodar `impossivel_01`** — o instrumento de recusa foi escrito e testado em 5 ramificações, mas **nunca rodou numa rodada real**. Agora estreia com os **dois leitores** (mecânico + Jev aditivo), o que é melhor do que estrear e ter que re-medir depois. Barato, e é o primeiro dado do tier borda. Precisa do Rhino com documento novo e de `--with typesafe-sdk`.
 2. **Rodar `esfera_01` ou `toro_01`** — fecha a calibração de facetamento. Curvatura dupla ainda está em 2% por precaução; curvatura simples mediu 0,055%. É a última incógnita do instrumento de medida.
 3. **Rodar os outros 7 casos do tier fácil** — `caixa_01`, `placa_01`, `cunha_01`, `piramide_01`, `tubo_01`, `cone_01`, `calha_01`. Consolidam a linha de base e respondem se 25 tool calls é o orçamento certo, que é o que trava a candidata nº 12.
 4. **Escrever os 12 casos do tier médio** — trabalho de mesa, sem Rhino.
@@ -79,6 +80,7 @@ O caro não é modelar, é **compor**. Isso apoia o *princípio* do PRD — tira
 | Hook de guarda | escrito e testado, **inerte** — não registrado, por decisão | `.claude/hooks/guard_call.py` |
 | Runner de rodada | exercitado em 6 rodadas; 1 defeito achado e corrigido | `evals/rodada.py` |
 | Instrumento de recusa | escrito e testado, **nunca rodou de verdade** | `julga_recusa()` |
+| Segundo leitor (Jev) | **aditivo**, nunca decide. Lógica testada offline; chamada real **nunca feita** | `julga_recusa_jev()` |
 | Template Grasshopper | `balcao.json` monta e roda — **não entrega** (sem bake) | `gh-templates/` |
 | `check.py` | lê Brep, Mesh e SubD; envelope min/max; `--solido`; histórico re-medido | `evals/check.py` |
 | Skill | `200f2e5`, intocada | `.claude/skills/rhino-nurbs/` |
@@ -115,21 +117,19 @@ Uma sondagem fora da série (sessão `25491602`, US$ 0,58) pediu uma divisória 
 
 ## Em voo
 
-- Nada. A skill está estável em `21a31ea` e as rodadas estão registradas.
+- **Smoke test do Jev**, pendente de restart do Claude Code para a chave entrar no ambiente. É o item 0 da próxima ação.
+- A skill está estável em `21a31ea`, intocada. As rodadas estão registradas.
 
 ## Fechado nesta sessão
 
-- **`v2r3` PASSOU** com 8 tool calls, 44,9 s, US$ 0,2156 — a rodada mais barata e curta da série inteira. Mas o sinal da candidata nº 11 ficou **inconclusivo**: 1 de 1 com traço, amostra de uma chamada. O efeito observado foi o agente abandonar `run_command`, não usá-lo melhor.
-
-- **`v2r2` PASSOU.** Primeira aprovação da série e **primeira vez que o agente salvou sozinho**, em 6 rodadas. `output/balcao_recepcao_v6.3dm`, 1 Brep, arquivo limpo. 36 tool calls, 162,9 s, US$ 0,5361.
-- **A candidata nº 7 funcionou, e a causa foi posicional.** O mesmo texto ("salve em `./output` com sufixo `_vN`") estava na skill nas duas rodadas que não salvaram — o que mudou foi entrar na lista numerada do "fluxo obrigatório". Para este modelo, estrutura pesa mais que ênfase.
-- **`harness v2, rodada 1` executada.** FALHOU por ausência de artefato; geometria medida `PASSOU` (bbox 2400,0 × 829,4 × 1100, volume 0,0035% de desvio, camada certa, 1 Brep). 27 tool calls, 129,8 s, US$ 0,5263.
-- Três afirmações minhas corrigidas por medição: cobertura da percepção, existência de tool tipada de arco, e a necessidade de hook para forçar consulta de docs — o agente consultou sozinho.
-- Defeito do runner corrigido: `UnicodeEncodeError` em stdout cp1252 engolia o relatório do agente.
-- Documentação operacional: `TUTORIAL.md`, `ESTADO.md`, `OPERACAO.md`, `../README.md`, `../supervisor/PROMPTS.md`; `HARNESS.md` com as camadas de defesa e corpus.
-- `supervisor/` virou repositório git, com cópia rastreada das travas de `dev/.claude/settings.json`.
-- Runner `evals/rodada.py` e hook `guard_call.py` (este último inerte).
-- **Análise que reprovou o bloqueio do C#** e corrigiu o registro sobre a tool tipada de arco — em `NOTAS.md`.
+- **Achado: o instrumento de recusa tinha viés para falso `PASSOU`.** `julga_recusa()` casa substring, e **substring não lê negação** — `"nao e impossivel, entao fiz uma aproximacao"` casa com o sinal `impossivel` e aprova uma rodada que fez exatamente o que o caso proíbe. Como o `impossivel_01` declara 8 sinais, vários genéricos, o risco de aprovação perdida é baixo e o risco concentrado é o falso positivo. **Direção oposta ao viés de 19/09**, quando o instrumento reprovava geometria correta. A lição: todo instrumento novo precisa de um caso de teste que tente enganá-lo.
+- **Segundo leitor escrito, aditivo por construção:** `julga_recusa_jev()` + `compara_com_jev()` em `evals/rodada.py`. Três Nouls numa requisição (`recusou_a_tarefa`, `motivo_geometrico_correto`, `parou_por_obstaculo_tecnico`). Roda depois do veredito mecânico, não altera veredito, não derruba rodada, e `FALHOU` por artefato nunca passa por modelo. A terceira pergunta nomeia a dúvida que o `INCONCLUSIVO` só descrevia em prosa.
+- **Lógica testada offline em 5 caminhos**, incluindo o falso positivo acima, que sai como `DIVERGENCIA FORTE`. O caminho feliz não foi testado: não havia chave.
+- **Decisão registrada:** o Jev resolve o problema de *interface* (resposta tipada em vez de texto para parsear), não o de verdade — os docs da TypeSafe dizem *"typed output guarantees the interface, not truth"*. Por isso não vira veredito. O `check.py` com `rhino3dm` continua sendo a fonte de verdade da geometria, e **pôr modelo ali seria rebaixar o instrumento**.
+- Documentação: `NOTAS.md` (seção de 21/09), `OPERACAO.md` (§3 passo 2-bis, chave e comando), `HARNESS.md` (camada 4, os dois instrumentos).
+- Segurança: o repositório é **público**; `.env` e `.env.*` no `.gitignore`, varredura do histórico sem nenhuma ocorrência de chave, chave em variável de ambiente de usuário via `setx`.
+- Plugin `typesafe@typesafe-ai` instalado no escopo de usuário (1 skill, 0 hooks, 0 MCP servers, ~207 tok sempre-presentes). **Não é dependência do harness** — o runner usa o SDK Python direto.
+- Os 16 commits pendentes de 20/09 foram enviados ao GitHub (`200f2e5..df0d2bf`).
 
 ---
 
@@ -153,3 +153,5 @@ Uma sondagem fora da série (sessão `25491602`, US$ 0,58) pediu uma divisória 
 - **O `guard_call.py` tem dois defeitos conhecidos** antes de qualquer reconsideração: falha fechada se o log ficar sem escrita, e lê o log inteiro a cada chamada (1,37 MB hoje, por causa dos PNG em base64 do `capture_viewport`).
 - **1 caso de eval de 30.** Uma aprovação não é taxa de aprovação — e agora a série recomeçou do zero.
 - **O runner nunca rodou ponta a ponta.** A primeira execução é também o teste dele; se algo quebrar, pode ser o runner e não o agente.
+- **O contrato do SDK do Jev está lido dos docs, não verificado.** `TypeSafeClient()` como context manager e `response.nouls[k].noul` vêm da página do SDK Python. Se divergirem, o leitor cai no caminho de indisponível e a rodada segue — o risco é de perder o dado do segundo leitor, não de perder a rodada. Mitigação: o smoke test do item 0.
+- **Um segundo leitor é um segundo instrumento, e instrumento tem viés.** Hoje ele não decide nada, então o viés é inofensivo. Ele deixa de ser inofensivo no dia em que alguém olhar a probabilidade e ajustar o veredito à mão. Se isso virar prática, precisa de re-medição do histórico, como em 19/09.
