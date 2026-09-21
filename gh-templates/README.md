@@ -1,34 +1,60 @@
 # Templates Grasshopper
 
-## ⚠️ O elo que falta: não há bake pelo MCP
+## ✅ O elo que faltava existe: bake por IronPython
 
-O `rhinomcp` 0.4.1.1 expõe 27 tools `gh_*` que **constroem e calculam** um grafo, e **nenhuma que entregue a geometria ao documento do Rhino**. Medido em 20/09, sessão `ec9b77a3`:
+**Resolvido em 21/09.** O `rhinomcp` 0.4.1.1 expõe 27 tools `gh_*` que constroem e calculam um
+grafo, e **nenhuma delas bakeia** — mas o bake não precisa ser tool do MCP. Ele é feito por
+`evals/bake_gh.py`, um **script versionado** enviado verbatim para `execute_rhinoscript_python_code`:
+
+```python
+import clr
+clr.AddReference("Grasshopper")
+import Grasshopper as gh
+doc_gh = gh.Instances.ActiveCanvas.Document
+```
 
 | Capacidade | Existe? |
 | --- | --- |
 | criar documento, buscar componentes, montar e ligar grafo | sim (`gh_build_graph`, `gh_mutate_graph`) |
 | rodar a solução e ler mensagens de erro | sim (`gh_run_solution`) |
-| ler o que um parâmetro produziu | **só metadado** |
-| **bake para o documento do Rhino** | **não existe** |
+| ler o que um parâmetro produziu | só metadado (`{"type":"Brep","is_solid":true,"faces":6}`) |
+| **bake para o documento do Rhino** | **sim, por `evals/bake_gh.py`** |
 | salvar o `.gh` | não existe |
 
-O `gh_get_parameter_value` devolve descrição, não geometria:
+**Por que a rota C# falhava e esta não.** O `execute_rhinocommon_csharp_code` não alcança o
+Grasshopper porque o assembly está fora da compilação (por reflexão, `NullReferenceException`). O
+plugin executa scripts com `PythonScript.Create()` — IronPython 2.7, em processo — e IronPython
+resolve assembly em **tempo de execução**. Era só isso.
 
-```json
-{"type":"Brep","is_solid":true,"faces":6}
-```
-
-Sem vértices, sem pontos de controle, sem serialização. **A geometria não sai do Grasshopper por este servidor.**
-
-A rota C# de dentro do Rhino também não alcança: o assembly do Grasshopper não é referenciado na compilação, e por reflexão deu `NullReferenceException`.
+**Medido:** 18 objetos bakeados, camada `ESTANDE::Mobiliario` criada pelo script, bbox
+2400 × 829,41 × 1100 mm. Confirmado pela resposta do servidor no `logs/rhino_calls.jsonl`.
 
 ### Consequência para a arquitetura
 
-A seção 5 do PRD desenha `LLM → parâmetros → template .gh → Rhino → .3dm`. A última seta **não existe** neste servidor. O agente monta o template, roda, confirma que o sólido fechou com 6 faces — e não consegue entregar nada.
+A seção 5 do PRD (`LLM → parâmetros → template → Rhino → .3dm`) **fica de pé**, e a última seta é
+infraestrutura do harness, como o `check.py`.
 
-Isso não é falha do agente nem do template. É limite da ponte.
+⚠️ **A garantia é de disciplina, não de trava.** O bake usa a superfície de código arbitrário que o
+projeto fechou de propósito. O script é **literal, versionado e revisado**, e o modelo **nunca o
+escreve** — é isso que mantém de pé o "o LLM emite parâmetros, não código". Se um dia o agente
+escrever o próprio bake, a garantia caiu sem ninguém notar.
 
-**Este é o gatilho para reavaliar o servidor MCP**, que o `NOTAS.md` tinha deixado condicionado a "necessidade de Rhino 9, necessidade de Grasshopper 2, ou fila de skills esgotada". Há agora um quarto motivo, mais forte que os três.
+**Falta:** seletor de componente (hoje bakeia os 18 objetos do canvas, geometria de construção
+incluída) e o passo de bake no `evals/rodada.py`.
+
+## 🛑 Aberto: este template não remonta a partir do JSON
+
+Na remontagem de 21/09 via `gh_build_graph`, os 21 componentes e 26 conexões entraram sem erro, mas
+a solução **não rodou limpa**: `Cap Holes` deu `Capping algorithm failed to return a result.`, porque
+o `Join Curves` saiu com `data_count: 2` — o perfil não fechou numa curva única.
+
+**É a armadilha declarada resolvida mais abaixo neste mesmo arquivo.** O `Flatten Tree` está no
+template e a fiação está correta (`arc`, `offset`, `ln`, `ln_2` → `flatten` → `join`).
+
+**Isto ataca a aposta do formato versionado**, não só este template: o JSON deveria ser reprodutível,
+e a reprodutibilidade falhou na primeira tentativa de exercê-la. Duas hipóteses, nenhuma
+investigada — o conversor `evals/gh_canvas_para_template.py` perde informação, ou o `gh_build_graph`
+liga diferente do canvas original. O `_canvas_bruto.json` existe exatamente para esta auditoria.
 
 ## O formato versionado é JSON, não `.gh`
 
@@ -63,7 +89,9 @@ Primeiro template do catálogo. 21 componentes, 26 conexões.
 
 **Cadeia:** `corda` ÷ 2 → pontos A, B, C → `Arc 3Pt` → `Offset Curve` (distância negativa, para o centro) → `End Points` + 2 `Line` → `Flatten Tree` → `Join Curves` → `Extrude` (vetor Z = `altura`) → `Cap Holes`.
 
-**Estado: monta e calcula, não entrega.** Com os valores acima, o grafo produz perfil fechado de 5609,6 mm e um Brep sólido de 6 faces — consistente com R = 2550, r = 1950 e bbox ≈ 2400 × 829 × 1100. **Isso não foi verificado pelo `check.py`**, porque não há como trazer o sólido ao Rhino. É leitura dos componentes do GH, não medição do artefato.
+**Estado: entrega, mas não remonta.** Na sessão original de 20/09 o grafo produziu perfil fechado de 5609,6 mm e um Brep sólido de 6 faces — consistente com R = 2550, r = 1950 e bbox ≈ 2400 × 829 × 1100. **Isso nunca foi verificado pelo `check.py`**: era leitura dos componentes do GH, não medição do artefato.
+
+Agora há bake, então a medição é possível — mas **a remontagem a partir deste JSON falha no `Cap Holes`** (ver bloqueio no topo). Enquanto isso não for resolvido, o número acima continua sendo alegação de 20/09, não evidência.
 
 Duas armadilhas encontradas ao montar, que valem para os próximos templates:
 

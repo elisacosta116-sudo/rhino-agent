@@ -230,6 +230,187 @@ O servidor põe `include_delta` e `include_health` no envelope de toda mutação
 
 Nada mais mudou. A skill está em `200f2e5`, intocada.
 
+## ✅ O BAKE FUNCIONA — a rota IronPython alcança o Grasshopper — 21/09
+
+> Sondagem fora da série, sem veredito. Duas invocações, 6 chamadas MCP, **US$ 0,44** no total.
+> Sessões `03b4d3a6` (passo 1) e `4f90861f` (passo 2). Log: 385 → 391 linhas.
+
+### O resultado
+
+**`clr.AddReference("Grasshopper")` funciona dentro do `execute_rhinoscript_python_code`.**
+Sem exceção. `gh.Instances.ActiveCanvas.Document` devolveu o documento. O `BakeGeometry` entregou
+geometria ao documento do Rhino.
+
+Saída literal do script (`evals/bake_gh.py`, enviado verbatim):
+
+```
+componentes bakeaveis: 12
+objetos bakeados: 18
+camada: ESTANDE::Mobiliario (indice 2)
+```
+
+**Confirmado por evidência independente do relato do agente** — resposta do servidor a
+`get_document_summary`, lida do `logs/rhino_calls.jsonl`, não da narração:
+
+```json
+"object_count": 18,
+"objects_by_type": {"ARC": 5, "POINT": 5, "LINE": 4, "BREP": 3, "CURVE": 1},
+"objects_by_layer": {"Mobiliario": 18},
+"model_bounding_box": [[-1200.0, -529.4117647058824, 0.0], [1200.0000000000005, 300.0, 1100.0]]
+```
+
+Isso é **2400 × 829,41 × 1100 mm** — o alvo verificado do `balcao_01`. O documento tinha 0 objetos
+antes; a camada `ESTANDE::Mobiliario` foi criada pelo script, com o pai já existente.
+
+**A hipótese estava certa, e pelo motivo previsto.** A rota C# falhou porque o assembly do
+Grasshopper está fora da compilação; IronPython resolve em tempo de execução. Era a diferença.
+
+### O que isto decide
+
+**A seção 5 do PRD fica de pé.** `LLM → parâmetros → template → Rhino → .3dm` fecha: a última seta
+existe, e é um script versionado do harness, não autoria do modelo. O plano B — abandonar o `.gh`
+e migrar para script com schema — **não será executado**.
+
+O bloqueio arquitetural de 20/09 está **resolvido**, e resolvido sem trocar de servidor, sem
+perder a baseline e sem reescrever o PRD.
+
+### Três ressalvas, antes que isto vire otimismo
+
+1. **O script bakeou tudo que era bakeável: 18 objetos**, incluindo geometria de construção
+   (5 pontos, 5 arcos, 4 linhas). Produção precisa de **seletor de componente** — bakear a saída
+   do alvo, não o canvas inteiro. Está previsto, mas não está feito.
+2. **Os 3 BREPs não são sólido fechado.** O `Cap Holes` falhou nesta remontagem (ver seção
+   seguinte), então são extrusões sem tampa. O bake entregou o que havia; não havia sólido.
+3. **A bbox bater com o alvo é encorajador, não é prova.** É a caixa dos 18 objetos juntos,
+   curvas de construção incluídas. Coincide com o alvo; não demonstra que o sólido está certo.
+   Prova mesmo só sai com `.3dm` salvo e passado pelo `check.py`.
+
+### 🛑 Achado colateral, e é sério: o template versionado não remonta
+
+O `gh_build_graph` montou os 21 componentes e as 26 conexões do `gh-templates/balcao.json` sem
+erro, mas a solução **não rodou limpa**: `Cap Holes` deu
+`Capping algorithm failed to return a result.`
+
+Diagnóstico do agente: o `Join Curves` saiu com `data_count: 2` — o perfil não fechou numa curva
+única — e `Extrude` e `Cap Holes` herdaram os dois ramos.
+
+**É a armadilha que o `gh-templates/README.md` declara resolvida.** O `Flatten Tree` está no
+template (componente `flatten`) e a fiação está correta: `arc`, `offset`, `ln`, `ln_2` entram todos
+no `flatten` (input 0), que alimenta o `join`. Ainda assim o join não fechou.
+
+**Consequência para a arquitetura, não só para este template:** o JSON versionado é o artefato que
+o PRD aposta como reprodutível — *"é diffável no git, é exatamente o que `gh_build_graph` consome"*.
+**Essa reprodutibilidade acabou de falhar na primeira tentativa de exercê-la.** O grafo que
+funcionou em 20/09 e o grafo remontado a partir do JSON não são o mesmo grafo.
+
+Duas hipóteses, nenhuma investigada: o conversor `evals/gh_canvas_para_template.py` perde
+informação (ordem de entrada? enxerto de árvore?), ou o `gh_build_graph` liga de um jeito que o
+canvas original não tinha. **Isto precisa ser resolvido antes de qualquer caso de eval de
+template** — senão o template não é artefato versionado, é rascunho.
+
+## SERVIDOR DA McNEEL: VERIFICADO E DESCARTADO — e a rota que sobrou — 21/09
+
+> Trabalho de mesa, sem Rhino e sem rodada. Levantamento de código-fonte via `gh`, não de documentação.
+
+### A pergunta, e a resposta
+
+O bloqueio de 20/09 (o Grasshopper não entrega geometria) tinha três saídas, e a preferida era
+**trocar pelo servidor oficial da McNeel**, condicionada a uma incógnita: *ele faz bake?*
+
+**Não faz.** Inventário completo das tools do `mcneel/RhinoAI`, tirado dos arquivos-fonte:
+
+| Família | Tools | Bake? |
+|---|---|---|
+| Documento/cena | 27 (`CreateTool`, `SaveDocTool`, `ListObjectsTool`, `RunPythonTool`, `RunCSharpTool`, `RunCommandTool`…) | não |
+| Grasshopper 1 | 13 (`Start`, `ClearCanvas`, `SearchComponents`, `DescribeComponent`, `PlaceComponent`, `PlaceSlider`, `Connect`, `ConnectMany`, `Delete`, `ApplyGraph`, `GetCanvasGraph`, `Solve`) | **não** |
+| Grasshopper 2 | 14, espelhando GH1 | **não** |
+
+Três provas independentes:
+
+1. **`BakeGeometry`** — a chamada do RhinoCommon que comete geometria no documento — tem
+   **0 ocorrências** no repositório inteiro.
+2. "Bake" aparece **2 vezes** em todo o repo: num gerador de IDs aleatórios (coincidência) e numa
+   página de documentação que **alerta contra** bakear — *"the cheapest way to 'match' your
+   geometry is to bake your existing Rhino objects into the GH output. That's not parametric."*
+3. `rhino/plugin/Tools/GH1/GH1_SolveTool.cs` prova a arquitetura: opera sobre
+   `IGH_PreviewObject`, calcula `GetPreviewBoundingBox` e dá zoom na **pré-visualização**. É a
+   mesma lacuna que temos.
+
+Não é repositório abandonado: push em 21/09/2026, 316 estrelas, MIT, releases em julho e setembro.
+**É ausência da capacidade, não falta de manutenção.**
+
+**Decisão: não trocar. Fechada por evidência, não por preferência.** Trocar zeraria 6 rodadas e
+14 casos **e não resolveria o problema que motivou a troca**. A terceira razão de 19/09 ("trocar
+zera a baseline") não só continua válida como agora é a única que importa — as outras duas viraram
+irrelevantes, porque o benefício que as compensaria não existe.
+
+**Confirmação lateral do nosso próprio bloqueio:** o código do servidor atual diz de si mesmo
+*"Grasshopper preview is live but not baked"* (`plugin/Functions/GrasshopperHelpers.cs:169`) e
+reporta `has_baked_rhino_objects`. E a `0.4.1.1` instalada **já é a última tag** — não há upgrade
+esperando. O bloqueio registrado no `ESTADO.md` está correto.
+
+### O achado que reabre o `.gh`: bake é do plugin, não do protocolo
+
+O único servidor com bake (`EaseHee/rhino-mcp` — imaturo: 8 estrelas, 1 fork, parado desde maio)
+delega a um bridge C# que roda **em processo com o Grasshopper**:
+
+```python
+def gh_bake_to_rhino(args: _BakeIn) -> dict[str, Any]:
+    """Bake the output of one or more components into the active Rhino document."""
+    return runtime().require_bridge().call("gh.canvas.bake", args.model_dump())
+```
+
+Ou seja: **bake não é capacidade do MCP, é de quem está dentro do processo.** E nós já temos duas
+portas para esse mesmo processo — só uma foi testada.
+
+| Rota | Estado | Por quê |
+|---|---|---|
+| `execute_rhinocommon_csharp_code` | **falhou** | assembly do GH fora da compilação; por reflexão, `NullReferenceException` |
+| `execute_rhinoscript_python_code` | **nunca tentada para bake** | — |
+
+**O motivo da falha do C# é exatamente o que a rota Python contorna.** O plugin executa scripts com
+`PythonScript.Create()` (`plugin/Functions/ExecuteRhinoscript.cs:23`), que no Rhino 8 é
+**IronPython 2.7, em processo**. IronPython resolve assembly em **tempo de execução** via
+`clr.AddReference("Grasshopper")` — a peça que faltava na compilação C#.
+
+Se alcançar, o bake vira **script fixo, versionado e revisado**: infraestrutura do harness, como o
+`check.py`. O princípio da seção 5 do PRD fica intacto — o LLM continua emitindo só parâmetros;
+quem bakeia é o harness.
+
+**Tensão a controlar, dita aqui para não ser esquecida depois:** `execute_rhinoscript_python_code`
+é a superfície de código arbitrário que o projeto fechou de propósito (61 de 208 chamadas em
+script; a API inventada da 3-bis). A mitigação é o bake **nunca ser autoria do modelo** — script
+literal, versionado, executado por passo do runner. Isso é disciplina, não trava.
+
+**Pendente: a sondagem que responde.** Fora da série, sem veredito, US$ 0,05–0,20, exige Rhino
+aberto com o template no canvas. É o próximo passo do projeto.
+
+### Correção de instrumento: as séries não se separavam sozinhas
+
+O `cases.jsonl` não tinha como distinguir as séries a não ser pela **caixa da palavra** do veredito
+(`PASSOU` vs `falhou`) — convenção adotada em 20/09 e escrita na skill de onboarding. **Ela não se
+sustenta:** a `rodada 4` da série antiga está gravada como `PASSOU` **maiúsculo**. Toda contagem
+automática somava um veredito pré-v2 à série v2, inflando o placar em um PASSOU (dava 6 PASSOU
+onde a v2 tem 5).
+
+Achado pela própria skill de onboarding, que leu o número inflado na primeira execução.
+
+**Corrigido:** todo registro de `historico` agora tem campo **`serie`** explícito (`pre-v2` | `v2`);
+a nota descritiva que vivia no campo `serie` da `v2r1` virou `nota_serie`. Nenhum outro campo foi
+tocado — verificado por diff registro a registro contra backup. O placar por série passa a ser:
+
+| Série | Vereditos |
+|---|---|
+| `pre-v2` | falhou 3 · anulada 1 · **PASSOU 1** ← o que contaminava |
+| `v2` | **PASSOU 5** · FALHOU 1 |
+
+A skill de onboarding foi corrigida junto: conta pelo campo, e avisa se algum registro aparecer
+com `serie SEM CAMPO`.
+
+**O padrão, de novo:** é o terceiro defeito de instrumento do projeto (bbox solta em 19/09, falso
+`PASSOU` do `julga_recusa` em 21/09, e agora a separação de séries). Os três eram invisíveis até
+alguém medir contra o disco em vez de ler o documento.
+
 ## SEGUNDO LEITOR DE RECUSA — Jev/TypeSafe, aditivo — 21/09
 
 > Trabalho de mesa, sem Rhino e sem rodada. Nenhuma chamada ao Jev foi feita ainda.
