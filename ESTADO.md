@@ -3,7 +3,7 @@
 > **Atualize este arquivo ao fim de toda sessão.** É o primeiro que se lê ao voltar.
 > Formato fixo: não cresça o documento, substitua o conteúdo. Histórico fica em `NOTAS.md`.
 
-**Última sessão:** 20/09/2026
+**Última sessão:** 20/09/2026 — sessão longa, 6 rodadas + 2 sondagens + 1 template
 
 ---
 
@@ -29,15 +29,14 @@ Isto é também o **gatilho para reavaliar o servidor MCP**, que estava condicio
 
 ## Próxima ação
 
-**Parar de mexer na skill e ampliar o dataset.** A fila de candidatas ficou sem item de evidência forte, e as três últimas rodadas mostram por quê: **o `balcao_01` já é resolvido, e um caso só não distingue regra de acaso.**
+**Decidir o caminho do bloqueio arquitetural acima.** É decisão de produto, não técnica, e trava a frente de templates inteira. Enquanto não for decidida, as outras frentes seguem sem depender dela.
 
-~~**1. Consertar o instrumento para o tier de borda.**~~ **Feito.** `espera_recusa` + `sinais_de_recusa` no caso, julgados por `julga_recusa()` em `evals/rodada.py`. Cinco ramificações testadas; desistir cai em `INCONCLUSIVO`, não em `PASSOU`. Primeiro caso escrito: `impossivel_01`, **ainda não rodado**.
+Trabalho pronto para seguir, em ordem de valor, **nenhum bloqueado**:
 
-**2. Escrever o tier fácil — 12 primitivas com volume analítico.** Caixa, cilindro, tubo, cunha, anel. É onde se descobre se o agente usa a superfície tipada sem cair em script, que é a aposta central da arquitetura do PRD. Rodar o lote responde também a pergunta que trava a candidata nº 12: se 25 tool calls é o número certo.
-
-**3. Rodar `impossivel_01`** — exercita o instrumento novo numa rodada real e vale como primeiro dado do tier borda.
-
-~~**Calibrar a tolerância dos casos curvos.**~~ **Feito na v2r5.** Facetamento de curvatura simples: 0,055%, contra os 2% que eu tinha arbitrado. Tolerância apertada para 0,5% em `cilindro_01`, `tubo_01`, `cone_01`, `calha_01` e `caixa_furo_01`. **`esfera_01` e `toro_01` ficam em 2%** — curvatura dupla faceta nas duas direções, ainda sem medição. Rodar um dos dois fecha a calibração.
+1. **Rodar `impossivel_01`** — o instrumento de recusa foi escrito e testado em 5 ramificações, mas **nunca rodou numa rodada real**. Barato, e é o primeiro dado do tier borda. Precisa do Rhino com documento novo.
+2. **Rodar `esfera_01` ou `toro_01`** — fecha a calibração de facetamento. Curvatura dupla ainda está em 2% por precaução; curvatura simples mediu 0,055%. É a última incógnita do instrumento de medida.
+3. **Rodar os outros 7 casos do tier fácil** — `caixa_01`, `placa_01`, `cunha_01`, `piramide_01`, `tubo_01`, `cone_01`, `calha_01`. Consolidam a linha de base e respondem se 25 tool calls é o orçamento certo, que é o que trava a candidata nº 12.
+4. **Escrever os 12 casos do tier médio** — trabalho de mesa, sem Rhino.
 
 ⚠️ **A baseline anterior a 20/09 não é comparável.** As rodadas 1–4 rodaram sem percepção. Detalhe em `NOTAS.md`, seção "HARNESS v2".
 
@@ -63,7 +62,7 @@ Isto é também o **gatilho para reavaliar o servidor MCP**, que estava condicio
 | primitiva com orientação (`prisma_hex_01`) | 17 | US$ 0,27 |
 | composição (`balcao_01`) | 8–36 | US$ 0,22–0,54 |
 
-O caro não é modelar, é **compor**. Se isso se confirmar nos casos restantes, é argumento direto para a tese central do PRD: a forma mora no template `.gh` e o modelo só preenche parâmetros.
+O caro não é modelar, é **compor**. Isso apoia o *princípio* do PRD — tirar a composição do modelo e pôr num artefato parametrizado. Mas **não** apoia especificamente o `.gh`, que hoje não entrega geometria (ver bloqueio no topo). O argumento é a favor de "template", não de "Grasshopper".
 
 **Variância de rota, mesmo prompt e mesma skill:** v2r1 foi tipada, v2r2 misturou tudo, v2r3 fez um script só. Em nenhuma o agente seguiu a ordem de preferência declarada na skill.
 
@@ -78,11 +77,13 @@ O caro não é modelar, é **compor**. Se isso se confirmar nos casos restantes,
 | Rota C# | **aberta** — proposta de fechar foi analisada e **rejeitada** | — |
 | Hook de log | ativo | `.claude/hooks/log_call.py` |
 | Hook de guarda | escrito e testado, **inerte** — não registrado, por decisão | `.claude/hooks/guard_call.py` |
-| Runner de rodada | pronto, não exercitado ponta a ponta | `evals/rodada.py` |
-| `check.py` | corrigido em 19/09; 2 lacunas abertas | `evals/check.py` |
+| Runner de rodada | exercitado em 6 rodadas; 1 defeito achado e corrigido | `evals/rodada.py` |
+| Instrumento de recusa | escrito e testado, **nunca rodou de verdade** | `julga_recusa()` |
+| Template Grasshopper | `balcao.json` monta e roda — **não entrega** (sem bake) | `gh-templates/` |
+| `check.py` | lê Brep, Mesh e SubD; envelope min/max; `--solido`; histórico re-medido | `evals/check.py` |
 | Skill | `200f2e5`, intocada | `.claude/skills/rhino-nurbs/` |
 
-**Marco do log:** `logs/rhino_calls.jsonl` tem **217 linhas**. O runner faz essa conta sozinho.
+**Marco do log:** `logs/rhino_calls.jsonl` tem **385 linhas**. O runner faz essa conta sozinho.
 
 ---
 
@@ -100,7 +101,7 @@ Uma sondagem fora da série (sessão `25491602`, US$ 0,58) pediu uma divisória 
 
 1. ~~**check por faixa**~~ **Feito.** `--bbox-max` / `--bbox-min` por eixo, `0` = sem limite. A peça do coral, que reprovava por 19,3%, agora passa; e reprova de verdade quando estoura um teto real.
 2. ~~**ler Mesh e SubD**~~ **Feito.** Mesh medida de verdade (bbox e volume por divergência, sólido por `IsClosed`); SubD mede caixa de controle como limite superior e **não mede volume** — o `rhino3dm` não expõe a superfície limite, e fingir precisão aí repetiria o bug de 19/09. Histórico re-medido, nenhum veredito mudou.
-3. **A rota `gh_*` não aparece sozinha.** 350 chamadas registradas, **zero** de Grasshopper. A skill manda usar "template já existente" e `gh-templates/` está vazio. Se a arquitetura do PRD depende disso, precisa de template e de menção explícita. **Continua aberta.**
+3. ~~**A rota `gh_*` não aparece sozinha.**~~ **Resolvido, e revelou coisa pior.** O agente usou as tools `gh_*` assim que recebeu a tarefa de construir um template, e montou o grafo sem dificuldade. O que ele não consegue é **tirar a geometria de lá** — ver o bloqueio no topo.
 
 4. ~~**exigência de sólido fechado**~~ **Feito.** O `check.py` reprovava `IsSolid = false` incondicionalmente, e uma vela é superfície aberta por definição — hypar perfeito dava `FALHOU`. Agora `--solido {fechado|aberto|qualquer}`, vindo de `check.is_solid` no caso.
 
