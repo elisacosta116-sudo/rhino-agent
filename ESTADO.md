@@ -3,7 +3,7 @@
 > **Atualize este arquivo ao fim de toda sessão.** É o primeiro que se lê ao voltar.
 > Formato fixo: não cresça o documento, substitua o conteúdo. Histórico fica em `NOTAS.md`.
 
-**Última sessão:** 21/09/2026 — **o bloqueio arquitetural caiu**: o bake funciona pela rota IronPython. McNeel verificada e descartada; separação de séries corrigida; segundo leitor do tier borda escrito. Sondagem, não rodada.
+**Última sessão:** 21/09/2026 — **o bloqueio arquitetural caiu**: o bake funciona pela rota IronPython. McNeel verificada e descartada por evidência; achada e corrigida a causa de o template não remontar (**correção ainda não provada no Rhino**); separação de séries corrigida; segundo leitor do tier borda escrito. Sondagens, nenhuma rodada.
 
 ---
 
@@ -180,13 +180,15 @@ Uma sondagem fora da série (sessão `25491602`, US$ 0,58) pediu uma divisória 
 
 ## Em voo
 
-- **O canvas do Grasshopper ficou montado** com o grafo do balcão (erro no `Cap Holes`) e **18 objetos bakeados** no documento do Rhino, camada `ESTANDE::Mobiliario`. Nada foi salvo. Se o Rhino ainda estiver aberto, é o estado de partida para investigar a remontagem.
+- 🔴 **A correção do template nunca foi provada no Rhino.** Está commitada e testada de mesa, mas a remontagem não chegou a rodar: primeiro o Rhino caiu, depois um **incidente da Anthropic** derrubou o caminho `claude -p` (500 em qualquer prompt, inclusive `"diga apenas OK"`; status.claude.com confirmou *partial outage* de Claude Code e API em 21–22/09). **É a primeira coisa a fazer na próxima sessão** — o prompt já está desenhado, com parada condicional antes do bake.
 - **Smoke test do Jev** — já desbloqueado (chave no ambiente), ainda não executado.
 - A skill está estável em `21a31ea`, intocada. As rodadas estão registradas.
-- **2 commits locais não enviados**: `cd6f201` (segundo leitor Jev) e `b929cee` (gitignore `.superpowers/`).
+- **1 commit local não enviado**: `59ed854` (correção do conversor). Os anteriores foram para o GitHub em 21/09.
+- O `supervisor` ganhou remoto **privado** (`elisacosta116-sudo/supervisor`, branch `master`), com os 4 commits enviados. Era o único trabalho sem cópia fora do disco.
 
 ## Fechado nesta sessão
 
+- **Causa de o template não remontar, achada e corrigida:** o conversor descartava a saída de origem das conexões (`End Points` tem `Start` e `End`; as duas linhas do perfil caíam na saída 0). Agora usa `source_output_name`, campo que o contrato do `gh_build_graph` já define, nas 26 conexões — mais rede de segurança contra conexão ambígua e aliases legíveis de volta. **Não provado no Rhino**, ver "Em voo".
 - ✅ **O bloqueio arquitetural de 20/09 caiu.** O bake funciona pela rota IronPython: 18 objetos entregues ao documento do Rhino, bbox 2400 × 829,41 × 1100, confirmado pela resposta do servidor no log — não pelo relato do agente. Custo total da sondagem: **US$ 0,44**, 6 chamadas MCP. A seção 5 do PRD fica de pé e o plano B foi arquivado.
 - 🛑 **Bloqueio novo, e ataca a aposta do PRD:** o `balcao.json` **não remonta** — `Cap Holes` falha porque o `Join Curves` sai com 2 ramos, apesar de o `Flatten Tree` estar presente e bem ligado. O JSON versionado não reproduz o grafo que funcionou. É a próxima ação.
 - **`evals/bake_gh.py`** — script de bake versionado, camada por parâmetro. Enviado verbatim pelo agente (conferido no `tool_input.code` do log).
