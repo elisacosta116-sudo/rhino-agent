@@ -210,7 +210,7 @@ Uma sondagem fora da série (sessão `25491602`, US$ 0,58) pediu uma divisória 
 - ✅ ~~A correção do template nunca foi provada no Rhino.~~ **Provada em 22/09**, e revelou dois defeitos novos — ver o topo deste documento.
 - **Smoke test do Jev** — já desbloqueado (chave no ambiente), ainda não executado.
 - A skill está estável em `21a31ea`, intocada. As rodadas estão registradas.
-- ~~3 commits locais não enviados~~ **Vencido: zero.** Os dois repositórios estão em dia com o `origin` até `e18ee30`. O `addda29` (conserto do log) é local e ainda não foi empurrado.
+- ~~3 commits locais não enviados~~ **Vencido: zero.** Os dois repositórios estão em dia com o `origin`, `rhino-agent` até `655a30c`.
 - ⚠️ **O `PreToolUse` está commitado mas não registrado.** É a única peça deste conserto que o supervisor não pode aplicar, e é a que faz o resto valer. Enquanto não for, toda rodada nova sai marcada `cego_a_falha`.
 - **Os prompts das sondagens não estão versionados.** O de 21/09 ("já desenhado") morreu com o contexto da sessão e teve de ser reescrito. Prompt de sondagem é instrumento: ou vai para `PROMPTS.md`, ou se perde.
 - O `supervisor` ganhou remoto **privado** (`elisacosta116-sudo/supervisor`, branch `master`), com os 4 commits enviados. Era o único trabalho sem cópia fora do disco.
