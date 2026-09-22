@@ -230,6 +230,91 @@ O servidor põe `include_delta` e `include_health` no envelope de toda mutação
 
 Nada mais mudou. A skill está em `200f2e5`, intocada.
 
+## CONSERTO DO LOG: a chamada que falha passa a aparecer — 22/09 (mesa, sem rodada)
+
+> Trabalho de mesa, **nenhuma invocação de modelo**, custo zero. Commit `addda29`.
+> O log real continua em **431 linhas**: todo o teste rodou em cwd temporário, de propósito —
+> o marco é a base de contagem de toda rodada, e sujá-lo para testar o contador de rodadas
+> seria estragar o instrumento com o teste do instrumento.
+
+### O que estava errado
+
+O hook era só `PostToolUse`, que não dispara em erro de tool. O `gh_build_graph` que falhou em
+22/09 não entrou no log; o que teve sucesso, entrou. A contagem de chamadas — que é critério de
+caso, comparada com `max_tool_calls` — era **limite inferior, não valor**. E o que ela escondia
+era o modo de falha mais interessante: tentar, errar, tentar de novo. Um agente que erra cinco
+vezes e acerta na sexta registrava uma chamada.
+
+### A decisão que o `ESTADO.md` pedia: re-interpretável, não marco novo
+
+Os 11 vereditos já gravados **ficam**, carimbados `log_cego_a_falha: true`. Não há re-medição
+possível — a informação nunca foi gravada, e nenhum re-processamento a inventa. O que dá para
+fazer é rotular, e é o que foi feito.
+
+**`log_cego_a_falha` ausente significa CEGO, não limpo.** O default do leitor é `True`. É a
+escolha deliberada: registro sem o campo é anterior a 22/09, e ler ausência como "todas
+concluídas" carimbaria de exato justamente o número que não é. Um instrumento que erra tem de
+errar para o lado de admitir ignorância.
+
+As contagens seguem separadas por série, como todo o resto — `pre-v2` (45, 25, 68, 9) e `v2`
+(27, 36, 8, 17, 10, 15). **Nenhuma das duas é comparável com as daqui para a frente.**
+
+### Falha aberta, e é o ponto não negociável do conserto
+
+Em `PreToolUse`, sair com código ≠ 0 **bloqueia a chamada**. Um logger que derruba a chamada que
+deveria medir inverte o instrumento: a rodada passaria a medir o hook em vez do agente, e
+falharia do jeito mais caro possível — parecendo resultado do modelo. Por isso o script inteiro
+está em `try/except` e sai `0` sempre.
+
+Perder uma linha de log é barato. Negar uma tool call é fabricar resultado.
+
+É exatamente a diferença entre este hook e o `guard_call.py`, que falha **fechado** — e é por isso
+que aquele segue inerte, sem registro, por decisão.
+
+Nada vai para stdout nem stderr: em `PreToolUse` o que o hook imprime pode entrar no contexto do
+agente, e o contexto do agente é variável do eval.
+
+### O critério de ANULADA mudou junto, e isso importa
+
+A contagem da rodada passa a ser **tentativas**, não concluídas — inclusive no teste de rodada
+anulada. Uma rodada cujas chamadas *todas* falharam tocou no Rhino: é falha de verdade, com causa
+no log. Contando só o que concluiu, ela apareceria como **0 chamadas** e viraria `ANULADA`,
+atribuindo a Rhino fechado ou contaminação de contexto o que era resultado legítimo do modelo.
+Seria o erro mais caro possível para esta série: descartar dado bom como problema de ambiente.
+
+### O que foi verificado, e o que não foi
+
+Testado offline, fora do log real:
+
+| Teste | Resultado |
+|---|---|
+| hook nas duas fases | grava 2 linhas para um par pre+post |
+| hook com entrada inválida | sai `0` **sem gravar** — falha aberta confirmada |
+| contador com falha | `3 tentativas, 2 concluídas, falhou: gh_build_graph` |
+| contador sem `PreToolUse` | cai no formato antigo e marca `cego_a_falha` |
+| contador com marco | respeita o offset |
+
+Confirmado também que o payload já traz os três campos de que o contador depende
+(`hook_event_name`, `tool_use_id`, `tool_name`) — sem `tool_use_id` o pareamento devolveria
+"todas concluídas" em silêncio, que é pior que não medir.
+
+⚠️ **O que NÃO foi verificado: que o registro pegou.** Falta ligar o `PreToolUse` no
+`.claude/settings.json`, que é trava do operador — o supervisor entrega o diff, o usuário aplica
+(a tentativa de editar foi negada pelo classificador, citando a trava, e **não foi contornada
+por Bash**: a trava existe para que o hook não mude por fora, e o hook é variável do eval).
+O teste offline prova que o script funciona; não prova que ele está sendo chamado. A confirmação
+é uma chamada MCP real dando **duas** linhas no log em vez de uma.
+
+### Erro cometido dentro da própria correção
+
+O docstring do `conta_chamadas()` chamava `45, 25, 68, 9, 27, 36` de "as seis rodadas da série
+v2". Não são: os quatro primeiros são `pre-v2` (rodadas 1, 2, 3-bis, 4), e a v2 é
+`27, 36, 8, 17, 10, 15`. É **a mesma confusão de séries** que custou a correção de 21/09 — o
+campo `serie` existe exatamente para impedi-la — cometida na linha que avisa sobre ela.
+Corrigido. Vale registrar porque o padrão é o interessante: a lista cronológica de números é
+convidativa, e juntar séries não comparáveis numa sequência só parece inofensivo até virar
+média.
+
 ## ✅ A CADEIA FECHOU PONTA A PONTA — `PASSOU` medido — 22/09
 
 > Sondagem fora da série, sem veredito de modelo. Oito invocações `claude -p`, **US$ 1,69**.

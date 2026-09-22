@@ -78,9 +78,12 @@ def conta_chamadas(marco):
     chamada que falhou.
 
     **A contagem da rodada e' `tentativas`, nao `concluidas`.** Ate 22/09 era o
-    contrario, sem alternativa: so havia PostToolUse no log. As contagens das
-    seis rodadas da serie v2 (45, 25, 68, 9, 27, 36) sao LIMITE INFERIOR, nao
-    valor, e nao sao comparaveis com as daqui para a frente.
+    contrario, sem alternativa: so havia PostToolUse no log. TODAS as contagens
+    ja gravadas sao LIMITE INFERIOR, nao valor, e nenhuma e' comparavel com as
+    daqui para a frente: pre-v2 (45, 25, 68, 9) e v2 (27, 36, 8, 17, 10, 15).
+    As duas series continuam separadas pelo campo `serie`, como em todo o resto
+    -- juntar as duas numa lista so' e' exatamente o erro que o campo existe
+    para impedir, e esta linha ja' o cometeu uma vez.
 
     `cego_a_falha` marca a rodada que caiu no formato antigo -- hook de
     PreToolUse nao registrado no settings.json. Ai o numero volta a ser limite

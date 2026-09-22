@@ -3,7 +3,7 @@
 > **Atualize este arquivo ao fim de toda sessão.** É o primeiro que se lê ao voltar.
 > Formato fixo: não cresça o documento, substitua o conteúdo. Histórico fica em `NOTAS.md`.
 
-**Última sessão:** 22/09/2026 — **a cadeia fechou ponta a ponta, medida**: `LLM → parâmetros → template → Rhino → .3dm` deu `PASSOU` no `check.py`. Dois defeitos caíram no caminho, nenhum previsto: `component_name` não identifica componente, e bake sem malha entrega arquivo que o instrumento não lê. Achado de instrumento: o log não registra chamada que falha. Sondagens, nenhuma rodada.
+**Última sessão:** 22/09/2026 — **a cadeia fechou ponta a ponta, medida**: `LLM → parâmetros → template → Rhino → .3dm` deu `PASSOU` no `check.py`. Dois defeitos caíram no caminho, nenhum previsto: `component_name` não identifica componente, e bake sem malha entrega arquivo que o instrumento não lê. Achado de instrumento: o log não registrava chamada que falha — **conserto commitado no mesmo dia (`addda29`), falta uma linha de registro que é trava do operador**. Sondagens e trabalho de mesa, nenhuma rodada.
 
 ---
 
@@ -42,15 +42,37 @@ continua não existindo, e o alvo certo foi achado por regra de desempate); `_Sa
 porque a opção pegou, e se o padrão de SaveSmall mudar isto quebra em silêncio; e **nenhuma rodada
 de modelo aconteceu** — o placar da série v2 não mudou.
 
-## 🔎 Achado de instrumento: o log não registra chamada que falha
+## 🔎 O log era cego a chamada que falha — consertado no código, **falta ligar**
 
-O `gh_build_graph` que falhou **não está** em `logs/rhino_calls.jsonl`; o que teve sucesso, está.
-O hook é `PostToolUse` e não dispara em erro de tool.
+O `gh_build_graph` que falhou **não estava** em `logs/rhino_calls.jsonl`; o que teve sucesso,
+estava. O hook era só `PostToolUse`, que não dispara em erro de tool.
 
-**A contagem de chamadas de toda rodada subestima**, e o que ela esconde é justamente o modo de
-falha mais interessante: tentar, errar e tentar de novo. Um agente que erra cinco vezes e acerta
-na sexta registra uma chamada. O orçamento de tool calls é critério de caso, e o número comparado
-com ele não é o número real — o que também envenena o risco "orçamento nunca pegou", mais abaixo.
+**A contagem de chamadas de toda rodada subestimava**, e o que ela escondia é justamente o modo
+de falha mais interessante: tentar, errar e tentar de novo. Um agente que erra cinco vezes e
+acerta na sexta registrava uma chamada.
+
+**Conserto commitado em `addda29`**, e o que ele faz:
+
+- `log_call.py` roda nos **dois** eventos. `PreToolUse` é a tentativa e dispara sempre; a dupla
+  tentativa-sem-resultado de mesmo `tool_use_id` **é** a chamada que falhou.
+- **Falha aberta, e não é negociável:** em `PreToolUse`, sair com código ≠ 0 *bloqueia* a chamada.
+  Um logger que derruba a chamada que deveria medir inverte o instrumento — a rodada passaria a
+  medir o hook, e falharia parecendo resultado do modelo. Tudo em `try/except`, sai `0` sempre,
+  e nada vai para stdout/stderr (em `PreToolUse` isso entraria no contexto do agente).
+- `conta_chamadas()` no runner: a contagem da rodada passa a ser **tentativas**, e o critério de
+  `ANULADA` junto — rodada cujas chamadas *todas* falharam tocou no Rhino e é resultado legítimo,
+  não problema de setup. Contar só o concluído a carimbaria de anulada, que é o erro mais caro
+  possível para esta série: descartar dado bom como falha de ambiente.
+
+⚠️ **Falta uma linha, e sem ela nada disso mede:** registrar `PreToolUse` em
+`.claude/settings.json`, que é **trava do operador** — o supervisor entrega o diff, o usuário
+aplica. Até lá o runner detecta o formato antigo e imprime `cego_a_falha` em vez de fingir
+precisão. O diff é o bloco `PostToolUse` duplicado com a chave trocada; nada mais muda.
+
+**Decisão tomada, que o documento pedia:** o histórico **é re-interpretável, não vira marco novo**.
+Os 11 vereditos já gravados ficam, carimbados `log_cego_a_falha: true`, e **campo ausente
+significa cego**, não limpo — ler ausência como "todas concluídas" carimbaria de exato justamente
+o número que não é.
 
 ## Histórico curto — como a cadeia chegou até aqui
 
@@ -72,12 +94,18 @@ garantia da seção 5 do PRD caiu sem ninguém notar.
 
 ## Próxima ação
 
-**Consertar o log, antes de qualquer rodada.** O achado acima invalida a contagem de chamadas, que
-é a métrica de toda rodada. Trabalho de mesa, e é pré-requisito de medir qualquer coisa:
-registrar também as chamadas que falham. `PostToolUse` não basta — precisa de `PreToolUse`
-(registra a tentativa) ou de um par tentativa/resultado. Ao mudar, decidir se o histórico de
-391 linhas é re-interpretável ou se vira marco novo, e **dizer isso em `NOTAS.md`** — as contagens
-das 6 rodadas da v2 passam a ser limite inferior, não valor.
+**Ligar o `PreToolUse`, e confirmar com uma chamada real — antes de qualquer rodada.** O código
+está commitado e testado offline; o que falta é o registro no `.claude/settings.json` do agente,
+que é trava do operador. Dois passos, nessa ordem:
+
+1. **Aplicar o diff** — duplicar o bloco `PostToolUse` do `.claude/settings.json` com a chave
+   trocada para `"PreToolUse"`, mesmo matcher e mesmo comando. **Pelas mãos do usuário.**
+2. **Confirmar no Rhino, com uma chamada MCP qualquer:** têm de sair **duas** linhas no
+   `logs/rhino_calls.jsonl`, não uma. O teste offline prova que o script funciona; **não** prova
+   que o registro pegou, e essa é a diferença que decide se a próxima rodada mede ou só avisa.
+
+Sem o passo 2 nenhuma rodada nova é comparável, porque não se sabe se o número é tentativa ou
+resultado. Gastar uma rodada para descobrir isso é caro e evitável.
 
 Depois disso, em ordem de valor, **nenhum bloqueado**:
 
@@ -143,11 +171,11 @@ O caro não é modelar, é **compor**. Isso apoia o *princípio* do PRD — tira
 | Segundo leitor (Jev) | **aditivo**, nunca decide. Lógica testada offline; chamada real **nunca feita** | `julga_recusa_jev()` |
 | **Bake do Grasshopper** | ✅ **funciona e entrega arquivo mensurável** (IronPython + malha de render comitada). Falta seletor de componente e o passo no runner | `evals/bake_gh.py` |
 | Template Grasshopper | ✅ **`balcao.json` remonta, resolve limpo e mede `PASSOU`** (22/09). Saída única agora por índice | `gh-templates/` |
-| Hook de log | ativo, mas **cego a chamada que falha** — `PostToolUse` não dispara em erro. Contagem subestima | `.claude/hooks/log_call.py` |
+| Hook de log | código pronto para os dois eventos, falha aberta, testado offline — ⚠️ **`PreToolUse` ainda não registrado**, então na prática segue cego | `.claude/hooks/log_call.py` |
 | `check.py` | lê Brep, Mesh e SubD; envelope min/max; `--solido`; histórico re-medido | `evals/check.py` |
 | Skill | **`21a31ea`** — mudou 2× na série v2: `e404dd2` (candidata nº 7, salvar) e `21a31ea` (candidata nº 11, prefixo de traço) | `.claude/skills/rhino-nurbs/` |
 
-**Marco do log:** `logs/rhino_calls.jsonl` tem **431 linhas** (391 + 1 de sessao perdida + 39 da sondagem de 22/09). O runner faz essa conta sozinho. ⚠️ **O marco conta chamadas bem-sucedidas apenas** — ver o achado de instrumento acima.
+**Marco do log:** `logs/rhino_calls.jsonl` tem **431 linhas** (391 + 1 de sessao perdida + 39 da sondagem de 22/09). O runner faz essa conta sozinho. ⚠️ **As 431 são chamadas bem-sucedidas apenas.** O conserto do log foi testado em cwd temporário justamente para não sujar este número: o marco é a base de contagem de toda rodada, e estragá-lo para testar o contador de rodadas seria arruinar o instrumento com o teste do instrumento. Depois de ligado o `PreToolUse`, a linha nova passa a ser ~2 por chamada — o marco absorve isso sozinho, porque a conta é por diferença.
 
 ---
 
@@ -182,7 +210,8 @@ Uma sondagem fora da série (sessão `25491602`, US$ 0,58) pediu uma divisória 
 - ✅ ~~A correção do template nunca foi provada no Rhino.~~ **Provada em 22/09**, e revelou dois defeitos novos — ver o topo deste documento.
 - **Smoke test do Jev** — já desbloqueado (chave no ambiente), ainda não executado.
 - A skill está estável em `21a31ea`, intocada. As rodadas estão registradas.
-- **3 commits locais não enviados**: `59ed854`, `7a8d407` e o de 22/09. Os anteriores foram para o GitHub em 21/09.
+- ~~3 commits locais não enviados~~ **Vencido: zero.** Os dois repositórios estão em dia com o `origin` até `e18ee30`. O `addda29` (conserto do log) é local e ainda não foi empurrado.
+- ⚠️ **O `PreToolUse` está commitado mas não registrado.** É a única peça deste conserto que o supervisor não pode aplicar, e é a que faz o resto valer. Enquanto não for, toda rodada nova sai marcada `cego_a_falha`.
 - **Os prompts das sondagens não estão versionados.** O de 21/09 ("já desenhado") morreu com o contexto da sessão e teve de ser reescrito. Prompt de sondagem é instrumento: ou vai para `PROMPTS.md`, ou se perde.
 - O `supervisor` ganhou remoto **privado** (`elisacosta116-sudo/supervisor`, branch `master`), com os 4 commits enviados. Era o único trabalho sem cópia fora do disco.
 
@@ -196,8 +225,16 @@ Uma sondagem fora da série (sessão `25491602`, US$ 0,58) pediu uma divisória 
   desambiguar) ainda **não está no conversor**.
 - **Defeito de instrumento achado: bake sem malha de render entrega `.3dm` que o `check.py` não
   mede.** Corrigido em `evals/bake_gh.py`. Sombrear o viewport não resolve — testado.
-- **Defeito de instrumento achado, ainda ABERTO: o log é cego a chamada que falha.** `PostToolUse`
-  não dispara em erro de tool. É a próxima ação.
+- **Defeito de instrumento achado E consertado no código: o log era cego a chamada que falha.**
+  `PostToolUse` não dispara em erro de tool. Commit `addda29`: hook nos dois eventos com falha
+  aberta, `conta_chamadas()` pareando por `tool_use_id`, histórico carimbado. Testado offline em
+  cwd temporário — o hook grava as duas fases e sai `0` com entrada inválida sem gravar; o
+  contador nomeia a chamada que falhou, cai no formato antigo quando não há `PreToolUse`, e
+  respeita o marco. **Falta ligar** — ver a próxima ação.
+- **Erro corrigido na própria correção:** o docstring do `conta_chamadas()` chamava
+  `45, 25, 68, 9, 27, 36` de "as seis rodadas da série v2". Não são — os quatro primeiros são
+  `pre-v2`. É a mesma confusão de séries que custou a correção de 21/09, cometida de novo na
+  linha que avisa sobre ela.
 - **Método que funcionou, e vale repetir:** prompt de sondagem com **parada condicional explícita**
   (*"se falhar, relate e pare; diagnosticar é trabalho do supervisor"*). O agente parou quatro
   vezes em vez de improvisar — inclusive recusando-se a relatar um `object_count` porque isso
@@ -221,7 +258,7 @@ Uma sondagem fora da série (sessão `25491602`, US$ 0,58) pediu uma divisória 
 ## Riscos abertos
 
 - **Comando interativo do Rhino trava a sessão e o MCP não cancela.** Na v2r2 um `_Arc` sem prefixo de traço ficou pendurado com linha elástica no viewport, bloqueou o `run_command` seguinte e só saiu com `Esc` humano. **Numa rodada autônoma isso trava tudo a partir dali.** Candidata nº 11 ataca a causa; não há mitigação para o caso de acontecer mesmo assim.
-- **Orçamento de tool calls nunca pegou:** 45 → 25 → 68 → 9 → 27 → 36. E a rodada aprovada gastou 36 contra um limite de 25 — não se sabe se a regra está sendo ignorada ou se o número está errado. **Pior desde 22/09:** esses seis números contam só chamadas bem-sucedidas, então são **limite inferior**. O gasto real foi maior, e não se sabe quanto.
+- **Orçamento de tool calls nunca pegou.** `pre-v2`: 45 → 25 → 68 → 9. `v2`: 27 → 36 → 8 → 17 → 10 → 15. A rodada aprovada da v2 gastou 36 contra um limite de 25 — não se sabe se a regra está sendo ignorada ou se o número está errado. **E nenhum desses números é valor:** todos contam só chamadas bem-sucedidas, então são **limite inferior**; o gasto real foi maior, e não se sabe quanto. O instrumento para saber existe desde `addda29`, mas **só mede depois de ligado** — até lá o risco segue igual, e as duas séries não se juntam numa lista só (foi o que o campo `serie` existe para impedir).
 
 - **O template versionado não é reprodutível por construção — só por verificação.** `component_name`
   é ambíguo e o dump do canvas não traz GUID de tipo, então o mesmo JSON pode montar grafos
