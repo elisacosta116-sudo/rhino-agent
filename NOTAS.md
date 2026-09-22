@@ -230,6 +230,94 @@ O servidor põe `include_delta` e `include_health` no envelope de toda mutação
 
 Nada mais mudou. A skill está em `200f2e5`, intocada.
 
+## POR QUE O TEMPLATE NÃO REMONTAVA: a saída de origem, jogada fora — 21/09
+
+> Trabalho de mesa. A remontagem no Rhino **não chegou a rodar** — a conexão caiu
+> (`Could not connect to Rhino at 127.0.0.1:1999`). Causa identificada e corrigida; falta a prova.
+
+### A causa
+
+O conversor `evals/gh_canvas_para_template.py` gravava, de cada conexão, a **origem** e o índice de
+entrada do destino — e **jogava fora de qual saída da origem** o fio saía:
+
+```python
+saida.append({"source": mapa[oid], "target": destino,
+              "target_input_index": entrada["index"]})
+```
+
+O `End Points` tem duas saídas, `(0, 'Start')` e `(1, 'End')`. As duas linhas do perfil puxam dele:
+
+```
+lnS.in[1] <- ends . param_name='Start'
+lnE.in[1] <- ends . param_name='End'
+```
+
+No template convertido, as duas viraram a mesma coisa:
+
+```json
+{"source": "end", "target": "ln",   "target_input_index": 1}
+{"source": "end", "target": "ln_2", "target_input_index": 1}
+```
+
+Sem o nome da saída, o `gh_build_graph` cai na **saída 0** nas duas. As duas linhas passam a sair do
+mesmo ponto, o perfil não fecha, o `Join Curves` devolve 2 ramos e o `Cap Holes` falha — **cinco
+componentes adiante da causa**. Foi por isso que o diagnóstico apontou para o `Flatten Tree`, que
+sempre esteve correto.
+
+**A informação nunca faltou:** o `param_name` do `gh_get_canvas_state` é exatamente o nome da saída.
+O conversor lia `component_id` e descartava o resto do dicionário.
+
+### A correção, com o campo que o contrato define
+
+O contrato do servidor (`contracts/commands/gh_build_graph.json`, `$defs/connection`) declara
+`source_output_index` e `source_output_name` — este último descrito como *"Output parameter name or
+nickname on source"*. Não foi preciso inventar nada:
+
+```json
+{"source": "ends", "source_output_name": "Start", "target": "lnS", "target_input_index": 1}
+{"source": "ends", "source_output_name": "End",   "target": "lnE", "target_input_index": 1}
+```
+
+**O contrato marca o campo como opcional, e na prática ele é obrigatório** para qualquer origem com
+mais de uma saída. Template regenerado: `source_output_name` nas 26 conexões.
+
+### Rede de segurança, e o teste que tenta enganá-la
+
+A perda era **silenciosa** — o conversor rodava sem erro e só quebrava na remontagem, longe da
+causa. O conversor agora avisa quando uma conexão vem de origem com mais de uma saída sem dizer
+qual. Aplicando a lição de 21/09 (*"todo instrumento novo precisa de um caso de teste que tente
+enganá-lo"*), foi verificado nos dois sentidos:
+
+| Entrada | Resultado |
+|---|---|
+| template corrigido | 0 ambíguas — sem falso positivo |
+| formato antigo (nomes removidos) | **5 ambíguas**, incluindo `ends → lnS` e `ends → lnE` |
+
+Cinco, não duas: `arco → off`, `vec → extr` e `arco → flatAll` também eram ambíguas. Só as duas do
+`ends` mudavam o resultado de forma visível; as outras três calhavam de querer a saída 0 mesmo.
+**O template estava mais quebrado do que o sintoma mostrava.**
+
+### Ganho colateral: os aliases voltaram a ser legíveis
+
+O conversor derivava alias do *nickname*, e três `Construct Point` com nickname `Pt` viravam `pt`,
+`pt_2`, `pt_3`, numerados por ordem de iteração. O canvas já trazia `alias` próprio — `pA`, `pB`,
+`pC`, `arco`, `off`, `ends`, `lnS`, `lnE`, `flatAll` — posto lá pelo `gh_build_graph` original.
+Agora o conversor prefere esse, e só deriva quando não há alias válido.
+
+Consequência de interface: o slider `profundidade` virou **`prof`**, que sempre foi o nome real do
+grafo. Os aliases são a interface pública do template — é neles que o PRD encosta o "o LLM preenche
+parâmetros de algo já declarado" — então o `README.md` foi corrigido junto.
+
+### O que isto diz sobre a aposta do formato versionado
+
+O JSON **não era** reprodutível, e ninguém saberia até tentar. A promessa do `README` (*"é diffável
+no git, é exatamente o que `gh_build_graph` consome"*) era verdadeira sobre o formato e falsa sobre
+o conteúdo: faltava um campo que o contrato não exige e o servidor precisa.
+
+Isso não derruba a aposta — corrige uma implementação dela. Mas estabelece que **todo template novo
+precisa ser remontado e rodado antes de ser considerado versionado.** Converter sem erro não prova
+nada.
+
 ## ✅ O BAKE FUNCIONA — a rota IronPython alcança o Grasshopper — 21/09
 
 > Sondagem fora da série, sem veredito. Duas invocações, 6 chamadas MCP, **US$ 0,44** no total.

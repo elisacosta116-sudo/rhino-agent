@@ -32,24 +32,36 @@ componente**; os 3 BREPs **não são sólido fechado**, porque o `Cap Holes` fal
 bbox bater com o alvo é encorajador mas **não é prova** — é a caixa dos 18 objetos juntos. Prova só
 com `.3dm` pelo `check.py`.
 
-## 🛑 Bloqueio novo: o template versionado não remonta
+## 🔧 Template não remontava: causa achada e corrigida — falta provar no Rhino
 
-O `gh_build_graph` montou os 21 componentes e 26 conexões do `gh-templates/balcao.json` sem erro,
-mas a solução **não rodou limpa**: `Cap Holes` deu `Capping algorithm failed to return a result.`,
-porque o `Join Curves` saiu com `data_count: 2` — o perfil não fechou numa curva única.
+**Causa:** o conversor `evals/gh_canvas_para_template.py` gravava a origem de cada conexão e
+**jogava fora de qual saída dela**. As duas linhas do perfil puxam de `End Points` — `lnS` da
+saída `Start`, `lnE` da saída `End` — e sem essa informação as duas caíam na saída 0. O perfil não
+fechava, o `Join Curves` saía com `data_count: 2` e o `Cap Holes` falhava, **cinco componentes
+adiante da causa**.
 
-**É a armadilha que o `gh-templates/README.md` declara resolvida.** O `Flatten Tree` está no
-template e a fiação está correta (`arc`, `offset`, `ln`, `ln_2` → `flatten` → `join`). Ainda assim
-não fechou.
+Não era o `Flatten Tree`, que sempre esteve correto. A hipótese "o conversor perde informação"
+estava certa; a informação existia no `param_name` do `gh_get_canvas_state` e nunca era lida.
 
-**Isto ataca a aposta do PRD, não só este template.** O JSON versionado é o artefato que deveria
-ser reprodutível — *"é diffável no git, é exatamente o que `gh_build_graph` consome"*. **A
-reprodutibilidade falhou na primeira tentativa de exercê-la:** o grafo de 20/09 e o grafo remontado
-do JSON não são o mesmo grafo.
+**Corrigido**, com o campo que o contrato do `gh_build_graph` define (`$defs/connection`):
 
-Duas hipóteses, nenhuma investigada: o conversor `evals/gh_canvas_para_template.py` perde
-informação, ou o `gh_build_graph` liga diferente do canvas original. **Resolver antes de qualquer
-caso de eval de template** — senão o template não é artefato versionado, é rascunho.
+```json
+{"source": "ends", "source_output_name": "Start", "target": "lnS", "target_input_index": 1}
+{"source": "ends", "source_output_name": "End",   "target": "lnE", "target_input_index": 1}
+```
+
+O contrato marca o campo como **opcional**; na prática ele é obrigatório para qualquer origem com
+mais de uma saída. O template regenerado tem `source_output_name` nas **26 conexões**.
+
+Dois ganhos junto: o conversor passou a **avisar** quando uma conexão vem de origem com várias
+saídas sem dizer qual (no formato antigo, o aviso pega 5 conexões deste template), e passou a
+**preferir o alias do canvas** — `pA`, `lnS`, `ends`, `flatAll` em vez de `pt`, `pt_2`, `pt_3`.
+O slider `profundidade` virou `prof`, que é o nome real do grafo; `README.md` atualizado.
+
+⚠️ **Ainda não é evidência.** A correção foi testada de mesa (o instrumento pega o defeito que o
+motivou e não acusa o template correto), mas **a remontagem no Rhino não rodou**: a conexão caiu
+(`Could not connect to Rhino at 127.0.0.1:1999`). Enquanto o grafo não montar e rodar limpo, isto
+é hipótese bem fundamentada, não fato medido.
 
 ### Caminhos, encerrados em 21/09
 
@@ -64,9 +76,14 @@ caso de eval de template** — senão o template não é artefato versionado, é
 
 ## Próxima ação
 
-**Investigar por que o template não remonta** — o bloqueio novo acima. É trabalho de mesa mais uma sessão de canvas, e é pré-requisito de qualquer caso de eval de template: enquanto o JSON não reproduzir o grafo que funciona, não há artefato versionado para avaliar.
+**Provar a correção do template no Rhino** — exige Rhino aberto com `mcpstart` confirmado. Três passos numa sessão só, e fecham a cadeia inteira do PRD pela primeira vez:
 
-Comparar `gh-templates/_canvas_bruto.json` (resposta literal de `gh_get_canvas_state` de 20/09, guardada exatamente para esta auditoria) com o que o `gh_build_graph` monta a partir de `balcao.json`. A diferença está numa das duas pontas: o conversor `evals/gh_canvas_para_template.py` (97 linhas) ou a montagem.
+1. `gh_create_document` (canvas limpo — não reaproveitar o velho), remontar de `balcao.json` **passando `source_output_name` verbatim**, e `gh_run_solution`. Sucesso = `error_count: 0` e `join` com `data_count: 1`.
+2. Bakear com `evals/bake_gh.py` e salvar o `.3dm`.
+3. Medir com o `check.py`, no alvo já verificado:
+   `--bbox 2400 829 1100 --tol 0.01 --layer "ESTANDE::Mobiliario"`
+
+Se o passo 3 der `PASSOU`, `LLM → parâmetros → template → Rhino → .3dm` fecha ponta a ponta pela primeira vez, e o primeiro caso de eval de template deixa de ter pré-requisito.
 
 Depois disso, em ordem de valor:
 

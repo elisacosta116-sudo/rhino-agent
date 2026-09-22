@@ -17,7 +17,7 @@
       "decimals": 0
     },
     {
-      "alias": "profundidade",
+      "alias": "prof",
       "component_name": "Number Slider",
       "value": 600,
       "min": 50,
@@ -38,7 +38,7 @@
       "value": "2"
     },
     {
-      "alias": "a_b",
+      "alias": "metade",
       "component_name": "Division"
     },
     {
@@ -46,35 +46,35 @@
       "component_name": "Negative"
     },
     {
-      "alias": "pt",
+      "alias": "pA",
       "component_name": "Construct Point"
     },
     {
-      "alias": "pt_2",
+      "alias": "pB",
       "component_name": "Construct Point"
     },
     {
-      "alias": "pt_3",
+      "alias": "pC",
       "component_name": "Construct Point"
     },
     {
-      "alias": "arc",
+      "alias": "arco",
       "component_name": "Arc 3Pt"
     },
     {
-      "alias": "offset",
+      "alias": "off",
       "component_name": "Offset Curve"
     },
     {
-      "alias": "end",
+      "alias": "ends",
       "component_name": "End Points"
     },
     {
-      "alias": "ln",
+      "alias": "lnS",
       "component_name": "Line"
     },
     {
-      "alias": "ln_2",
+      "alias": "lnE",
       "component_name": "Line"
     },
     {
@@ -94,143 +94,169 @@
       "component_name": "Cap Holes"
     },
     {
-      "alias": "neg_2",
+      "alias": "negP",
       "component_name": "Negative"
     },
     {
-      "alias": "flatten",
+      "alias": "flatAll",
       "component_name": "Flatten Tree"
     }
   ],
   "conexoes": [
     {
       "source": "corda",
-      "target": "a_b",
+      "source_output_name": "Number Slider",
+      "target": "metade",
       "target_input_index": 0
     },
     {
       "source": "dois",
-      "target": "a_b",
+      "source_output_name": "Panel",
+      "target": "metade",
       "target_input_index": 1
     },
     {
-      "source": "a_b",
+      "source": "metade",
+      "source_output_name": "Result",
       "target": "neg",
       "target_input_index": 0
     },
     {
       "source": "neg",
-      "target": "pt",
+      "source_output_name": "Result",
+      "target": "pA",
       "target_input_index": 0
     },
     {
       "source": "flecha",
-      "target": "pt_2",
+      "source_output_name": "Number Slider",
+      "target": "pB",
       "target_input_index": 1
     },
     {
-      "source": "a_b",
-      "target": "pt_3",
+      "source": "metade",
+      "source_output_name": "Result",
+      "target": "pC",
       "target_input_index": 0
     },
     {
-      "source": "pt",
-      "target": "arc",
+      "source": "pA",
+      "source_output_name": "Point",
+      "target": "arco",
       "target_input_index": 0
     },
     {
-      "source": "pt_2",
-      "target": "arc",
+      "source": "pB",
+      "source_output_name": "Point",
+      "target": "arco",
       "target_input_index": 1
     },
     {
-      "source": "pt_3",
-      "target": "arc",
+      "source": "pC",
+      "source_output_name": "Point",
+      "target": "arco",
       "target_input_index": 2
     },
     {
-      "source": "arc",
-      "target": "offset",
+      "source": "arco",
+      "source_output_name": "Arc",
+      "target": "off",
       "target_input_index": 0
     },
     {
-      "source": "neg_2",
-      "target": "offset",
+      "source": "negP",
+      "source_output_name": "Result",
+      "target": "off",
       "target_input_index": 1
     },
     {
-      "source": "offset",
-      "target": "end",
+      "source": "off",
+      "source_output_name": "Curve",
+      "target": "ends",
       "target_input_index": 0
     },
     {
-      "source": "pt",
-      "target": "ln",
+      "source": "pA",
+      "source_output_name": "Point",
+      "target": "lnS",
       "target_input_index": 0
     },
     {
-      "source": "end",
-      "target": "ln",
+      "source": "ends",
+      "source_output_name": "Start",
+      "target": "lnS",
       "target_input_index": 1
     },
     {
-      "source": "pt_3",
-      "target": "ln_2",
+      "source": "pC",
+      "source_output_name": "Point",
+      "target": "lnE",
       "target_input_index": 0
     },
     {
-      "source": "end",
-      "target": "ln_2",
+      "source": "ends",
+      "source_output_name": "End",
+      "target": "lnE",
       "target_input_index": 1
     },
     {
-      "source": "flatten",
+      "source": "flatAll",
+      "source_output_name": "Data",
       "target": "join",
       "target_input_index": 0
     },
     {
       "source": "altura",
+      "source_output_name": "Number Slider",
       "target": "vec",
       "target_input_index": 2
     },
     {
       "source": "join",
+      "source_output_name": "Curves",
       "target": "extr",
       "target_input_index": 0
     },
     {
       "source": "vec",
+      "source_output_name": "Vector",
       "target": "extr",
       "target_input_index": 1
     },
     {
       "source": "extr",
+      "source_output_name": "Extrusion",
       "target": "cap",
       "target_input_index": 0
     },
     {
-      "source": "profundidade",
-      "target": "neg_2",
+      "source": "prof",
+      "source_output_name": "Number Slider",
+      "target": "negP",
       "target_input_index": 0
     },
     {
-      "source": "arc",
-      "target": "flatten",
+      "source": "arco",
+      "source_output_name": "Arc",
+      "target": "flatAll",
       "target_input_index": 0
     },
     {
-      "source": "offset",
-      "target": "flatten",
+      "source": "off",
+      "source_output_name": "Curve",
+      "target": "flatAll",
       "target_input_index": 0
     },
     {
-      "source": "ln",
-      "target": "flatten",
+      "source": "lnS",
+      "source_output_name": "Line",
+      "target": "flatAll",
       "target_input_index": 0
     },
     {
-      "source": "ln_2",
-      "target": "flatten",
+      "source": "lnE",
+      "source_output_name": "Line",
+      "target": "flatAll",
       "target_input_index": 0
     }
   ],

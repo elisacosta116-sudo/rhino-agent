@@ -74,6 +74,27 @@ uv run --no-project python evals/gh_canvas_para_template.py <canvas.json> gh-tem
 
 O `<canvas.json>` é a resposta de `gh_get_canvas_state`.
 
+### ⚠️ Toda conexão precisa de `source_output_name`
+
+O contrato do `gh_build_graph` marca o campo como opcional. **Na prática ele é obrigatório:** uma
+origem com mais de uma saída fica ambígua sem ele, e o build cai silenciosamente na saída 0.
+
+Foi o que quebrou este template. As duas linhas do perfil puxam de `End Points` — `lnS` da saída
+`Start`, `lnE` da saída `End` — e sem o nome as duas viraram `Start`. O perfil não fechava, o
+`Join Curves` saía com `data_count: 2` e o `Cap Holes` falhava, **cinco componentes adiante da
+causa**. É o tipo de perda que não aparece na conversão, só na remontagem.
+
+O conversor agora emite o campo a partir do `param_name` do `gh_get_canvas_state`, e **avisa**
+quando uma conexão vem de origem com várias saídas sem dizer qual. No formato antigo, o aviso
+pegava 5 conexões deste template.
+
+### Os aliases vêm do canvas, quando existem
+
+O conversor prefere o `alias` que o próprio canvas carrega — `pA`, `lnS`, `ends`, `flatAll` — em vez
+de derivar do nickname. Três `Construct Point` têm o mesmo nickname `Pt` e virariam `pt`, `pt_2`,
+`pt_3`, numerados por ordem de iteração: o template deixaria de ser legível, que é metade da razão
+deste formato existir. Só cai na derivação quando o canvas não traz alias válido.
+
 ## `balcao.json`
 
 Primeiro template do catálogo. 21 componentes, 26 conexões.
@@ -84,8 +105,12 @@ Primeiro template do catálogo. 21 componentes, 26 conexões.
 | --- | --- | --- |
 | `corda` | 2400 | 500 – 6000 |
 | `flecha` | 300 | 10 – 1500 |
-| `profundidade` | 600 | 50 – 1500 |
+| `prof` | 600 | 50 – 1500 |
 | `altura` | 1100 | 100 – 3000 |
+
+Os aliases são a **interface pública** do template — é neles que o PRD encosta o "LLM preenche
+parâmetros de algo já declarado". `prof` era `profundidade` até 21/09, quando o conversor passou a
+respeitar o alias do canvas; o nome real do grafo sempre foi `prof`.
 
 **Cadeia:** `corda` ÷ 2 → pontos A, B, C → `Arc 3Pt` → `Offset Curve` (distância negativa, para o centro) → `End Points` + 2 `Line` → `Flatten Tree` → `Join Curves` → `Extrude` (vetor Z = `altura`) → `Cap Holes`.
 
