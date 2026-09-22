@@ -122,9 +122,10 @@ Trabalho pronto para seguir, em ordem de valor, **nenhum bloqueado**:
 
 0. **Smoke test do Jev, antes de qualquer rodada.** Uma chamada Noul mínima, centavos de token. O contrato do SDK está lido dos docs e **nunca exercitado** — `TypeSafeClient()` como context manager, `response.nouls[k].noul`. Se estiver diferente do documentado, é melhor descobrir aqui do que com o Rhino aberto. ✅ **Desbloqueado:** a `TYPESAFE_API_KEY` já está visível no ambiente (verificado em 21/09, 108 chars) — o restart que faltava aconteceu.
 1. **Rodar `impossivel_01`** — o instrumento de recusa foi escrito e testado em 5 ramificações, mas **nunca rodou numa rodada real**. Agora estreia com os **dois leitores** (mecânico + Jev aditivo), o que é melhor do que estrear e ter que re-medir depois. Barato, e é o primeiro dado do tier borda. Precisa do Rhino com documento novo e de `--with typesafe-sdk`.
-2. **Rodar `esfera_01` ou `toro_01`** — fecha a calibração de facetamento. Curvatura dupla ainda está em 2% por precaução; curvatura simples mediu 0,055%. É a última incógnita do instrumento de medida.
-3. **Rodar os outros 7 casos do tier fácil** — `caixa_01`, `placa_01`, `cunha_01`, `piramide_01`, `tubo_01`, `cone_01`, `calha_01`. Consolidam a linha de base e respondem se 25 tool calls é o orçamento certo, que é o que trava a candidata nº 12.
-4. **Escrever os 12 casos do tier médio** — trabalho de mesa, sem Rhino.
+2. **Rodar `vela_hypar_01`** — escrito em 22/09, nunca rodado. **Primeiro caso do tier orgânico**, e estreia dos três flags que o instrumento ganhou para forma orgânica e nunca exerceu numa rodada pontuada: `bbox_max_mm`, `bbox_min_mm` e `is_solid: false` (`--solido aberto`). Os quatro discriminadores foram testados contra artefato real antes de escrever o caso — teto, piso, sólido-fechado-recusado e envelope generoso, todos corretos. A capacidade já apareceu na sondagem 2 (hypar anticlástico, 8 chamadas, US$ 0,19, **fora da série e sem veredito**); a dúvida não é se o modelo consegue, é se consegue **sob orçamento, salvando o artefato e na camada pedida** — que é exatamente onde a v2 mais falhou. ⚠️ O envelope verifica caixa e abertura, **não** classe de curvatura: superfície regrada passa no mesmo envelope, então "é mesmo anticlástica?" é leitura humana da captura e nunca conta como aprovação a mais.
+3. **Rodar `esfera_01` ou `toro_01`** — fecha a calibração de facetamento. Curvatura dupla ainda está em 2% por precaução; curvatura simples mediu 0,055%. É a última incógnita do instrumento de medida.
+4. **Rodar os outros 7 casos do tier fácil** — `caixa_01`, `placa_01`, `cunha_01`, `piramide_01`, `tubo_01`, `cone_01`, `calha_01`. Consolidam a linha de base e respondem se 25 tool calls é o orçamento certo, que é o que trava a candidata nº 12.
+5. **Escrever os 12 casos do tier médio** — trabalho de mesa, sem Rhino.
 
 ⚠️ **A baseline anterior a 20/09 não é comparável.** As rodadas 1–4 rodaram sem percepção. Detalhe em `NOTAS.md`, seção "HARNESS v2".
 
@@ -139,7 +140,7 @@ Trabalho pronto para seguir, em ordem de valor, **nenhum bloqueado**:
 | v2r5 | `cilindro_01` | calibra o facetamento da malha | **PASSOU** | 10 | US$ 0,17 |
 | v2r6 | `caixa_furo_01` | boolean — a operação que derrubou a 3-bis | **PASSOU** | 15 | US$ 0,23 |
 
-**5 de 6, em 4 casos de 14 escritos.** Ainda não é taxa de aprovação: **10 casos nunca rodaram**.
+**5 de 6, em 4 casos de 15 escritos.** Ainda não é taxa de aprovação: **11 casos nunca rodaram**.
 
 A separação das séries agora é o campo **`serie`** de cada registro do `historico` (`pre-v2` | `v2`), não mais a caixa da palavra do veredito. A regra antiga não se sustentava: a `rodada 4` da série antiga está gravada como `PASSOU` maiúsculo e inflava a v2 em um PASSOU. Corrigido em 21/09.
 
@@ -251,7 +252,7 @@ Uma sondagem fora da série (sessão `25491602`, US$ 0,58) pediu uma divisória 
 3. **Capturar os 5 tópicos de guidance que faltam** (`transforms`, `planar_regions`, `organization`, `verification`, `recovery`). Exige Rhino aberto; procedimento em `references/guidance/README.md`. O `verification` nunca foi lido em 217 chamadas.
 4. **Candidata nº 7** — obrigar o save.
 5. **Fechar a lacuna que sobrou do `check.py`** — escolha do Brep alvo. A outra (*arquivo sem malha de render*) foi atacada pelo lado do bake em 22/09, não pelo lado do check: o `check.py` continua sem saber medir Brep aparado sem malha, e **só não dói porque o bake agora sempre gera malha**. Arquivo vindo de outra fonte ainda cai no casco de controle. Ao mudar o instrumento, re-medir o histórico inteiro.
-6. **Escrever os casos de eval restantes** — 14 de ~30 escritos. Pré-requisito do piloto.
+6. **Escrever os casos de eval restantes** — 15 de ~30 escritos. Pré-requisito do piloto.
 7. **Construir os 4 primeiros templates** — balcão, arco, painel, totem. **Formato decidido:** `.gh` via JSON versionado; a rota IronPython alcançou e o balcão mediu `PASSOU`. Cada template novo só conta como versionado depois de **remontado, resolvido e medido** — converter sem erro não prova nada, e `component_name` ambíguo garante que aí haverá surpresa.
 8. **Medir os dois números da seção 1 do PRD** — tempo por proposta e variações por cliente.
 
@@ -269,7 +270,7 @@ Uma sondagem fora da série (sessão `25491602`, US$ 0,58) pediu uma divisória 
   GUID de tipo, que é pedido a montante.
 - **`dev/.claude/settings.json` não está sob controle de versão.** É o que impede o supervisor de mexer nas travas do operador. Há cópia rastreada em `supervisor/travas-do-supervisor.json`; re-copie ao mudar.
 - **O `guard_call.py` tem dois defeitos conhecidos** antes de qualquer reconsideração: falha fechada se o log ficar sem escrita, e lê o log inteiro a cada chamada (1,37 MB hoje, por causa dos PNG em base64 do `capture_viewport`).
-- **4 casos rodados de 14 escritos**, para um alvo de ~30. Cinco aprovações não são taxa de aprovação: 10 casos nunca rodaram, e 12 dos 14 escritos são do tier fácil.
+- **4 casos rodados de 15 escritos**, para um alvo de ~30. Cinco aprovações não são taxa de aprovação: 11 casos nunca rodaram, e 12 dos 15 escritos são do tier fácil. Os três que não são — `balcao_01` (médio), `impossivel_01` (borda) e `vela_hypar_01` (orgânico) — são os únicos que medem algo além de primitiva isolada, e só o primeiro já rodou.
 - ~~**O runner nunca rodou ponta a ponta.**~~ **Vencido:** exercitado em 6 rodadas, 1 defeito achado e corrigido. O que ainda nunca rodou de verdade é o **instrumento de recusa** (`julga_recusa()`) e o **segundo leitor** (`julga_recusa_jev()`) — ambos estreiam em `impossivel_01`.
 - **O contrato do SDK do Jev está lido dos docs, não verificado.** `TypeSafeClient()` como context manager e `response.nouls[k].noul` vêm da página do SDK Python. Se divergirem, o leitor cai no caminho de indisponível e a rodada segue — o risco é de perder o dado do segundo leitor, não de perder a rodada. Mitigação: o smoke test do item 0.
 - **Um segundo leitor é um segundo instrumento, e instrumento tem viés.** Hoje ele não decide nada, então o viés é inofensivo. Ele deixa de ser inofensivo no dia em que alguém olhar a probabilidade e ajustar o veredito à mão. Se isso virar prática, precisa de re-medição do histórico, como em 19/09.
