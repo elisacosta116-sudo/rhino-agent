@@ -230,6 +230,95 @@ O servidor põe `include_delta` e `include_health` no envelope de toda mutação
 
 Nada mais mudou. A skill está em `200f2e5`, intocada.
 
+## harness v2, rodada 7 — `vela_hypar_01` — **PASSOU** · estreia do tier orgânico
+
+- **Modelo:** sonnet · **Sessão:** `89139cd9`
+- **Tool calls:** 17 concluídas — **limite inferior**, log cego a falha (orçamento **15**)
+- **Turnos:** 39 · **262,5 s** · **US$ 1,1534**
+- **Arquivo:** `output/vela_hypar_v1.3dm` — **salvo pelo próprio agente**
+- **Veredito: PASSOU**
+- **Medido:** bbox `4000,0 × 3000,0 × 1500,0` (malha), `IsSolid false`, camada `ESTANDE::Cobertura`, 1 objeto, zero geometria de construção sobrando
+
+- **Relato do agente vs medido:** **bate, e o agente foi além do que lhe foi pedido admitir.**
+  Relatou bbox, `is_solid`, camada e contagem de objetos exatamente como o `check.py` mediu.
+  Mais importante: **declarou espontaneamente uma primeira tentativa fracassada** — relaxou X, Y
+  e Z juntos, a peça colapsou numa forma estrelada de três pontas, e ele descartou e refez.
+  Nenhum critério do caso o obrigava a contar isso. É o oposto do padrão das rodadas 1 e 2, em
+  que o Haiku media certo e julgava errado; aqui o julgamento acompanhou a medição, inclusive
+  sobre o próprio fracasso.
+- **Hipótese de causa:** o **custo** (US$ 1,15, o mais caro da série inteira) vem dessa tentativa
+  descartada, não da dificuldade do form-finding em si — a sondagem 2 de 20/09 entregou a mesma
+  família em 8 chamadas e US$ 0,19. A diferença entre as duas é o **briefing**: o meu exigiu
+  "bordas livres em cabo" e "os quatro ancoradouros são os únicos pontos fixos", e foi exatamente
+  a tentativa de honrar isso ao pé da letra que colapsou. O caso ficou mais caro porque estava
+  mais bem especificado — o que é informação sobre o caso, não sobre o modelo.
+
+### O desvio que o envelope não vê, e que eu tinha previsto errado
+
+O agente refez **relaxando só Z, com X e Y fixos na grade**. Isso contradiz o briefing: se todo
+nó está preso em planta, os ancoradouros **não** são os únicos pontos fixos, e as bordas não são
+cabos livres — são cabos que só podem ceder na vertical. O que saiu é um **campo de alturas
+relaxado**, não uma membrana em equilíbrio de forças.
+
+**E o envelope é estruturalmente incapaz de pegar isso.** Com os cantos fixos, a bbox é
+`4000 × 3000 × 1500` tanto na relaxação livre quanto no campo de alturas — e seria a mesma numa
+superfície regrada. O `nota_instrumento` do caso previa a cegueira, mas previu o disfarce errado:
+eu escrevi que a resposta barata seria a **superfície regrada**. Não foi. Foi algo mais sutil e
+bem mais perto de certo, que passa pelo mesmo buraco.
+
+**O agente declarou o desvio** ("Premissa que adotei"), o que o torna visível. Se não tivesse
+declarado, nada no instrumento o teria revelado. **Isso é sorte, não cobertura** — e é a lição
+desta rodada.
+
+### O agente ofereceu o discriminador que falta ao instrumento
+
+*"borda desvia 78,5 mm de uma reta entre os cantos — evidência de que não é superfície regrada"*.
+
+É claim, não evidência, pela doutrina do projeto. Mas é claim **verificável**, e aponta um check
+concreto que o `check.py` não tem: **desvio da borda em relação à corda entre ancoradouros**.
+Zero = regrada. Mede curvatura sem medir curvatura, e resolveria metade da cegueira acima.
+
+Fica a ressalva: os 78,5 mm são flecha em **Z**, não embarrigamento em planta. Separam a regrada
+simples, não separam o campo de alturas da membrana livre. O discriminador que faltaria para
+**essa** distinção é o desvio da borda em **planta** — que no campo de alturas é exatamente zero,
+por construção. Dois números, não um.
+
+### Ainda pendente: a leitura humana
+
+As capturas foram feitas pelo agente, mas vivem como base64 no log — **não há PNG no disco**. A
+verificação de "sela genuína, bordas côncavas" continua **não feita**. O `PASSOU` registrado
+significa o que o caso diz que significa — dentro do envelope, aberta, na camada certa — e nada
+além. Com o Rhino ainda aberto no arquivo, a leitura é direta no viewport.
+
+### Orçamento: terceira rodada seguida em que não pega
+
+17 concluídas contra teto de 15, e o **17 é limite inferior** — o `PreToolUse` não estava
+registrado nesta rodada. O gasto real foi ≥ 17 e não se sabe quanto. Somado a `v2r2` (36 contra
+25), o padrão agora tem duas aprovações que estouraram o próprio orçamento sem que isso afetasse
+o veredito. **Ou o teto entra no veredito, ou ele não é critério** — é a candidata nº 12, e esta
+rodada é o terceiro dado a favor de decidir.
+
+### Defeito de instrumento achado pelo próprio registro desta rodada
+
+O runner gravou o veredito **sem o campo `serie`** e com rótulo `1`. O placar do onboarding
+acusou `serie SEM CAMPO` na primeira conferência.
+
+**Causa:** o campo `serie` nasceu **à mão** em 21/09, aplicado aos registros que já existiam, e
+o runner nunca foi ensinado a escrevê-lo. As rodadas `v2r1`–`v2r6` têm o campo porque alguém o
+digitou depois. Esta foi a **primeira rodada gravada depois da invenção do campo** — e por isso a
+primeira a expor a lacuna. Uma correção aplicada só aos dados, sem chegar ao código que produz os
+dados, tem prazo de validade: vence na próxima escrita.
+
+**Segundo defeito, junto:** `proxima_rodada()` numerava **por caso**, então um caso novo começava
+do 1 — e `vela_hypar_01` virou "Rodada 1", colidindo com a rodada 1 pré-v2 do `balcao_01`. O
+`ESTADO.md` sempre leu `v2r1..v2r6` como sequência única da série; o runner é que discordava, em
+silêncio, desde sempre — só não aparecia porque todas as rodadas anteriores foram no mesmo caso.
+
+**Corrigido nos dois lugares:** constante `SERIE` no runner, gravada em todo registro; numeração
+varrendo todos os casos (`v2r7`, e o próximo é `v2r8`). O registro desta rodada foi corrigido à
+mão para `v2r7` / `serie: v2`, com `rotulo_corrigido_de` e nota explicando — **veredito e medidas
+intocados**.
+
 ## CONSERTO DO LOG: a chamada que falha passa a aparecer — 22/09 (mesa, sem rodada)
 
 > Trabalho de mesa, **nenhuma invocação de modelo**, custo zero. Commit `addda29`.

@@ -3,7 +3,7 @@
 > **Atualize este arquivo ao fim de toda sessão.** É o primeiro que se lê ao voltar.
 > Formato fixo: não cresça o documento, substitua o conteúdo. Histórico fica em `NOTAS.md`.
 
-**Última sessão:** 22/09/2026 — **a cadeia fechou ponta a ponta, medida**: `LLM → parâmetros → template → Rhino → .3dm` deu `PASSOU` no `check.py`. Dois defeitos caíram no caminho, nenhum previsto: `component_name` não identifica componente, e bake sem malha entrega arquivo que o instrumento não lê. Achado de instrumento: o log não registrava chamada que falha — **conserto commitado no mesmo dia (`addda29`), falta uma linha de registro que é trava do operador**. Sondagens e trabalho de mesa, nenhuma rodada.
+**Última sessão:** 22/09/2026 — **`v2r7`: o tier orgânico estreou e passou**, e o mais interessante não é o `PASSOU`: o agente entregou a peça por um **método que não era o pedido** (relaxou só Z, com a planta presa), declarou isso por conta própria, e **o envelope não tinha como ver**. Custou US$ 1,15 — 7,7× o guardrail do PRD. Antes disso, no mesmo dia: **a cadeia fechou ponta a ponta, medida** — `LLM → parâmetros → template → Rhino → .3dm` deu `PASSOU` no `check.py`. Dois defeitos caíram no caminho, nenhum previsto: `component_name` não identifica componente, e bake sem malha entrega arquivo que o instrumento não lê. Achado de instrumento: o log não registrava chamada que falha — **conserto commitado no mesmo dia (`addda29`), falta uma linha de registro que é trava do operador**. Sondagens e trabalho de mesa, nenhuma rodada.
 
 ---
 
@@ -94,7 +94,16 @@ garantia da seção 5 do PRD caiu sem ninguém notar.
 
 ## Próxima ação
 
-**Ligar o `PreToolUse`, e confirmar com uma chamada real — antes de qualquer rodada.** O código
+**⏳ PERECÍVEL, e vence quando o documento fechar: ler a `vela_hypar_v1` no viewport.** A `v2r7`
+passou no envelope, mas o envelope não julga curvatura — e as capturas do agente vivem como
+base64 no log, **não há PNG no disco**. Com o Rhino ainda aberto no arquivo, a leitura é direta.
+O que olhar: **sela genuína** (curvatura oposta nas duas direções), **bordas côncavas** (borda
+reta denunciaria superfície regrada) e **superfície única aberta**. O arquivo está salvo em
+`output/vela_hypar_v1.3dm`, então a leitura é recuperável — só fica mais cara.
+
+---
+
+**Ligar o `PreToolUse`, e confirmar com uma chamada real — antes da próxima rodada.** O código
 está commitado e testado offline; o que falta é o registro no `.claude/settings.json` do agente,
 que é trava do operador. Dois passos, nessa ordem:
 
@@ -122,7 +131,7 @@ Trabalho pronto para seguir, em ordem de valor, **nenhum bloqueado**:
 
 0. **Smoke test do Jev, antes de qualquer rodada.** Uma chamada Noul mínima, centavos de token. O contrato do SDK está lido dos docs e **nunca exercitado** — `TypeSafeClient()` como context manager, `response.nouls[k].noul`. Se estiver diferente do documentado, é melhor descobrir aqui do que com o Rhino aberto. ✅ **Desbloqueado:** a `TYPESAFE_API_KEY` já está visível no ambiente (verificado em 21/09, 108 chars) — o restart que faltava aconteceu.
 1. **Rodar `impossivel_01`** — o instrumento de recusa foi escrito e testado em 5 ramificações, mas **nunca rodou numa rodada real**. Agora estreia com os **dois leitores** (mecânico + Jev aditivo), o que é melhor do que estrear e ter que re-medir depois. Barato, e é o primeiro dado do tier borda. Precisa do Rhino com documento novo e de `--with typesafe-sdk`.
-2. **Rodar `vela_hypar_01`** — escrito em 22/09, nunca rodado. **Primeiro caso do tier orgânico**, e estreia dos três flags que o instrumento ganhou para forma orgânica e nunca exerceu numa rodada pontuada: `bbox_max_mm`, `bbox_min_mm` e `is_solid: false` (`--solido aberto`). Os quatro discriminadores foram testados contra artefato real antes de escrever o caso — teto, piso, sólido-fechado-recusado e envelope generoso, todos corretos. A capacidade já apareceu na sondagem 2 (hypar anticlástico, 8 chamadas, US$ 0,19, **fora da série e sem veredito**); a dúvida não é se o modelo consegue, é se consegue **sob orçamento, salvando o artefato e na camada pedida** — que é exatamente onde a v2 mais falhou. ⚠️ O envelope verifica caixa e abertura, **não** classe de curvatura: superfície regrada passa no mesmo envelope, então "é mesmo anticlástica?" é leitura humana da captura e nunca conta como aprovação a mais.
+2. ~~**Rodar `vela_hypar_01`**~~ — **feito, `v2r7`, PASSOU.** Ver o bloco em `NOTAS.md`. Deixou duas coisas em aberto, listadas logo abaixo: a leitura humana da peça, e o discriminador de borda que o instrumento não tem.
 3. **Rodar `esfera_01` ou `toro_01`** — fecha a calibração de facetamento. Curvatura dupla ainda está em 2% por precaução; curvatura simples mediu 0,055%. É a última incógnita do instrumento de medida.
 4. **Rodar os outros 7 casos do tier fácil** — `caixa_01`, `placa_01`, `cunha_01`, `piramide_01`, `tubo_01`, `cone_01`, `calha_01`. Consolidam a linha de base e respondem se 25 tool calls é o orçamento certo, que é o que trava a candidata nº 12.
 5. **Escrever os 12 casos do tier médio** — trabalho de mesa, sem Rhino.
@@ -139,8 +148,9 @@ Trabalho pronto para seguir, em ordem de valor, **nenhum bloqueado**:
 | v2r4 | `prisma_hex_01` | estreia do tier fácil | **PASSOU** | 17 | US$ 0,27 |
 | v2r5 | `cilindro_01` | calibra o facetamento da malha | **PASSOU** | 10 | US$ 0,17 |
 | v2r6 | `caixa_furo_01` | boolean — a operação que derrubou a 3-bis | **PASSOU** | 15 | US$ 0,23 |
+| v2r7 | `vela_hypar_01` | estreia do tier orgânico e do envelope | **PASSOU** — método desviou, envelope não vê | ≥17 (teto 15) | **US$ 1,15** |
 
-**5 de 6, em 4 casos de 15 escritos.** Ainda não é taxa de aprovação: **11 casos nunca rodaram**.
+**6 de 7, em 5 casos de 15 escritos.** Ainda não é taxa de aprovação: **10 casos nunca rodaram**.
 
 A separação das séries agora é o campo **`serie`** de cada registro do `historico` (`pre-v2` | `v2`), não mais a caixa da palavra do veredito. A regra antiga não se sustentava: a `rodada 4` da série antiga está gravada como `PASSOU` maiúsculo e inflava a v2 em um PASSOU. Corrigido em 21/09.
 
@@ -152,6 +162,12 @@ A separação das séries agora é o campo **`serie`** de cada registro do `hist
 | primitiva + boolean (`caixa_furo_01`) | 15 | US$ 0,23 |
 | primitiva com orientação (`prisma_hex_01`) | 17 | US$ 0,27 |
 | composição (`balcao_01`) | 8–36 | US$ 0,22–0,54 |
+| **form-finding (`vela_hypar_01`)** | **≥17** | **US$ 1,15** |
+
+⚠️ **O orgânico custa outra ordem de grandeza.** US$ 1,15 é **7,7× o guardrail do PRD** (US$ 0,15
+por pedido) e 2,1× a composição mais cara já medida. E não é o form-finding em si: a sondagem 2
+entregou a mesma família por US$ 0,19. O custo veio de **uma tentativa descartada** — o agente
+relaxou X, Y e Z juntos, a peça colapsou, ele refez. Briefing mais apertado, tentativa a mais.
 
 O caro não é modelar, é **compor**. Isso apoia o *princípio* do PRD — tirar a composição do modelo e pôr num artefato parametrizado. Mas **não** apoia especificamente o `.gh`, que hoje não entrega geometria (ver bloqueio no topo). O argumento é a favor de "template", não de "Grasshopper".
 
@@ -167,7 +183,7 @@ O caro não é modelar, é **compor**. Isso apoia o *princípio* do PRD — tira
 | Percepção do servidor | **ligada**, mas cobertura estreita: 2 de 27 respostas na v2r1, nenhuma das tools de criação | `.mcp.json` |
 | Rota C# | **aberta** — proposta de fechar foi analisada e **rejeitada** | — |
 | Hook de guarda | escrito e testado, **inerte** — não registrado, por decisão | `.claude/hooks/guard_call.py` |
-| Runner de rodada | exercitado em 6 rodadas; 1 defeito achado e corrigido | `evals/rodada.py` |
+| Runner de rodada | exercitado em 7 rodadas; 3 defeitos achados e corrigidos — o último par na `v2r7`: gravava sem o campo `serie` e numerava por caso em vez de por série | `evals/rodada.py` |
 | Instrumento de recusa | escrito e testado, **nunca rodou de verdade** | `julga_recusa()` |
 | Segundo leitor (Jev) | **aditivo**, nunca decide. Lógica testada offline; chamada real **nunca feita** | `julga_recusa_jev()` |
 | **Bake do Grasshopper** | ✅ **funciona e entrega arquivo mensurável** (IronPython + malha de render comitada). Falta seletor de componente e o passo no runner | `evals/bake_gh.py` |
@@ -201,6 +217,19 @@ Uma sondagem fora da série (sessão `25491602`, US$ 0,58) pediu uma divisória 
 **O padrão das quatro lacunas:** o instrumento foi escrito supondo que toda entrega é **sólido fechado, do tipo Brep, com dimensões exatas**. Forma orgânica quebra as três suposições de uma vez. Valeu mais achar isso por duas sondagens de US$ 0,77 do que por uma série de rodadas reprovadas.
 
 **Ainda sem instrumento: curva.** Uma teia é rede de curvas, e o `check.py` não a enxerga. Curva não tem volume nem sólido; o check para ela (comprimento total, segmentos, conectividade) ainda não tem caso que o justifique.
+
+**Ainda sem instrumento: classe de curvatura — e agora com caso que justifica.** A `v2r7` mostrou
+que o envelope aprova coisas que o briefing não pediu, porque com os ancoradouros fixos a bbox é
+a mesma na relaxação livre, no campo de alturas e na superfície regrada. O discriminador veio do
+próprio agente: **desvio da borda em relação à corda entre ancoradouros**, que ele mediu em
+78,5 mm. São **dois números, não um**, e a distinção importa:
+
+| Medida | Separa | Não separa |
+|---|---|---|
+| desvio da borda em **Z** (flecha) | regrada simples (dá 0) | campo de alturas de membrana livre |
+| desvio da borda em **planta** | campo de alturas (dá 0 por construção) | — |
+
+Candidato concreto para o `check.py`, e o primeiro que nasce de uma rodada em vez de uma sondagem.
 
 **Achado de fundo:** a peça é orgânica **na silhueta**, não na superfície — chapa recortada e ondulada. As famílias de gerador do PRD (casca relaxada, malha inflada, dupla curvatura) são sobre a superfície. Resolve a divisória como produto e não exercita a arquitetura apostada.
 
@@ -259,7 +288,7 @@ Uma sondagem fora da série (sessão `25491602`, US$ 0,58) pediu uma divisória 
 ## Riscos abertos
 
 - **Comando interativo do Rhino trava a sessão e o MCP não cancela.** Na v2r2 um `_Arc` sem prefixo de traço ficou pendurado com linha elástica no viewport, bloqueou o `run_command` seguinte e só saiu com `Esc` humano. **Numa rodada autônoma isso trava tudo a partir dali.** Candidata nº 11 ataca a causa; não há mitigação para o caso de acontecer mesmo assim.
-- **Orçamento de tool calls nunca pegou.** `pre-v2`: 45 → 25 → 68 → 9. `v2`: 27 → 36 → 8 → 17 → 10 → 15. A rodada aprovada da v2 gastou 36 contra um limite de 25 — não se sabe se a regra está sendo ignorada ou se o número está errado. **E nenhum desses números é valor:** todos contam só chamadas bem-sucedidas, então são **limite inferior**; o gasto real foi maior, e não se sabe quanto. O instrumento para saber existe desde `addda29`, mas **só mede depois de ligado** — até lá o risco segue igual, e as duas séries não se juntam numa lista só (foi o que o campo `serie` existe para impedir).
+- **Orçamento de tool calls nunca pegou.** `pre-v2`: 45 → 25 → 68 → 9. `v2`: 27 → 36 → 8 → 17 → 10 → 15 → ≥17. **Duas aprovações já estouraram o próprio teto** — `v2r2` (36 contra 25) e `v2r7` (≥17 contra 15) — sem que isso tocasse no veredito. **Ou o teto entra no veredito, ou não é critério**; é a candidata nº 12, e a `v2r7` é o terceiro dado a favor de decidir. A rodada aprovada da v2 gastou 36 contra um limite de 25 — não se sabe se a regra está sendo ignorada ou se o número está errado. **E nenhum desses números é valor:** todos contam só chamadas bem-sucedidas, então são **limite inferior**; o gasto real foi maior, e não se sabe quanto. O instrumento para saber existe desde `addda29`, mas **só mede depois de ligado** — até lá o risco segue igual, e as duas séries não se juntam numa lista só (foi o que o campo `serie` existe para impedir).
 
 - **O template versionado não é reprodutível por construção — só por verificação.** `component_name`
   é ambíguo e o dump do canvas não traz GUID de tipo, então o mesmo JSON pode montar grafos
@@ -270,7 +299,8 @@ Uma sondagem fora da série (sessão `25491602`, US$ 0,58) pediu uma divisória 
   GUID de tipo, que é pedido a montante.
 - **`dev/.claude/settings.json` não está sob controle de versão.** É o que impede o supervisor de mexer nas travas do operador. Há cópia rastreada em `supervisor/travas-do-supervisor.json`; re-copie ao mudar.
 - **O `guard_call.py` tem dois defeitos conhecidos** antes de qualquer reconsideração: falha fechada se o log ficar sem escrita, e lê o log inteiro a cada chamada (1,37 MB hoje, por causa dos PNG em base64 do `capture_viewport`).
-- **4 casos rodados de 15 escritos**, para um alvo de ~30. Cinco aprovações não são taxa de aprovação: 11 casos nunca rodaram, e 12 dos 15 escritos são do tier fácil. Os três que não são — `balcao_01` (médio), `impossivel_01` (borda) e `vela_hypar_01` (orgânico) — são os únicos que medem algo além de primitiva isolada, e só o primeiro já rodou.
+- **5 casos rodados de 15 escritos**, para um alvo de ~30. Seis aprovações não são taxa de aprovação: 10 casos nunca rodaram, e 12 dos 15 escritos são do tier fácil. Dos três que não são, `impossivel_01` (borda) segue sendo o único que nunca rodou — e é o que mede julgamento, não execução.
+- **A `v2r7` aprovou geometria cujo método não era o pedido, e o instrumento não tinha como ver.** Só se soube porque o agente declarou o desvio por conta própria. **Isso é sorte, não cobertura** — e é o risco mais novo da lista: o veredito mecânico cobre envelope, abertura, camada e artefato, e nada do que está entre isso e "faz o que foi pedido".
 - ~~**O runner nunca rodou ponta a ponta.**~~ **Vencido:** exercitado em 6 rodadas, 1 defeito achado e corrigido. O que ainda nunca rodou de verdade é o **instrumento de recusa** (`julga_recusa()`) e o **segundo leitor** (`julga_recusa_jev()`) — ambos estreiam em `impossivel_01`.
 - **O contrato do SDK do Jev está lido dos docs, não verificado.** `TypeSafeClient()` como context manager e `response.nouls[k].noul` vêm da página do SDK Python. Se divergirem, o leitor cai no caminho de indisponível e a rodada segue — o risco é de perder o dado do segundo leitor, não de perder a rodada. Mitigação: o smoke test do item 0.
 - **Um segundo leitor é um segundo instrumento, e instrumento tem viés.** Hoje ele não decide nada, então o viés é inofensivo. Ele deixa de ser inofensivo no dia em que alguém olhar a probabilidade e ajustar o veredito à mão. Se isso virar prática, precisa de re-medição do histórico, como em 19/09.

@@ -33,6 +33,7 @@ import datetime
 import io
 import json
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -51,6 +52,20 @@ LOG = RAIZ / "logs" / "rhino_calls.jsonl"
 MARCADOR = RAIZ / "logs" / "_rodada_atual.json"
 SAIDA = RAIZ / "output"
 ARQUIVO_MORTO = SAIDA / "_rodadas"
+
+# Serie do harness. TODA rodada gravada leva este rotulo, e e' ele -- nunca a
+# caixa da palavra do veredito -- que separa o que e' comparavel do que nao e'.
+#
+# O campo nasceu a mao em 21/09, aplicado aos registros que ja existiam, e o
+# runner nunca foi ensinado a escreve-lo: a primeira rodada gravada depois
+# disso (vela_hypar_01, 22/09) saiu SEM CAMPO e o placar do onboarding acusou.
+# Corrigido aqui, no unico lugar que grava.
+#
+# MUDE ISTO quando o harness mudar de um jeito que quebre a comparabilidade --
+# foi o que aconteceu em 20/09, quando a percepcao do servidor foi ligada e a
+# serie pre-v2 deixou de ser comparavel. Mudar a serie e' decisao de supervisor,
+# com registro em NOTAS.md; nao e' efeito colateral de mexer no runner.
+SERIE = "v2"
 
 # Limiares do leitor Jev. Assimetricos de proposito: um falso PASSOU e' o erro
 # caro desta serie (aprovar recusa que nao houve contamina a taxa de aprovacao,
@@ -161,15 +176,25 @@ def grava_casos(casos):
             f.write(json.dumps(caso, ensure_ascii=False) + "\n")
 
 
-def proxima_rodada(caso):
-    """Maior numero de rodada ja registrado + 1. Ignora rotulos tipo '3-bis'."""
+def proxima_rodada(casos):
+    """Proximo rotulo da SERIE, varrendo TODOS os casos: 'v2r7', 'v2r8'...
+
+    A numeracao e' da serie, nao do caso. Contar por caso fazia um caso novo
+    comecar do 1 -- foi o que aconteceu com vela_hypar_01, que virou "Rodada 1"
+    e colidiu com a rodada 1 pre-v2 do balcao_01. O placar do ESTADO.md sempre
+    leu v2r1..v2r6 como sequencia unica; o runner e' que discordava.
+
+    Le so' os rotulos da serie corrente (`v2r<n>`). Rodadas de outra serie e
+    rotulos a mao tipo '3-bis' sao ignorados, nao quebram a conta.
+    """
+    padrao = re.compile(rf"^{re.escape(SERIE)}r(\d+)$")
     numeros = []
-    for reg in caso.get("historico", []):
-        try:
-            numeros.append(int(reg.get("rodada")))
-        except (TypeError, ValueError):
-            continue
-    return max(numeros, default=0) + 1
+    for caso in casos:
+        for reg in caso.get("historico", []):
+            m = padrao.match(str(reg.get("rodada", "")))
+            if m:
+                numeros.append(int(m.group(1)))
+    return f"{SERIE}r{max(numeros, default=0) + 1}"
 
 
 def arquiva_saidas(rotulo):
@@ -524,7 +549,7 @@ def main():
     if alvo is None:
         sys.exit(f"caso '{a.caso_id}' nao esta em {CASOS}")
 
-    rotulo = a.rodada or str(proxima_rodada(alvo))
+    rotulo = a.rodada or proxima_rodada(casos)
     check = alvo["check"]
 
     print(f"== rodada {rotulo} · caso {alvo['id']} · modelo {a.model or '(settings.json)'}")
@@ -608,7 +633,8 @@ def main():
         jev = {"indisponivel": "--sem-jev"} if a.sem_jev else julga_recusa_jev(alvo, relato)
         observacoes = compara_com_jev(veredito_r, jev, check.get("limiar_jev"))
         registro = {
-            "rodada": int(rotulo) if rotulo.isdigit() else rotulo,
+            "rodada": rotulo,
+            "serie": SERIE,
             "modelo": a.model or "(settings.json)",
             "sessao": (r.get("session_id") or "")[:8],
             "tipo": "recusa",
@@ -670,7 +696,8 @@ def main():
     alvo_medido = m.get("objeto") or {}
 
     registro = {
-        "rodada": int(rotulo) if rotulo.isdigit() else rotulo,
+        "rodada": rotulo,
+        "serie": SERIE,
         "modelo": a.model or "(settings.json)",
         "sessao": (r.get("session_id") or "")[:8],
         "resultado": m.get("veredito"),
