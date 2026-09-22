@@ -3,93 +3,92 @@
 > **Atualize este arquivo ao fim de toda sessão.** É o primeiro que se lê ao voltar.
 > Formato fixo: não cresça o documento, substitua o conteúdo. Histórico fica em `NOTAS.md`.
 
-**Última sessão:** 21/09/2026 — **o bloqueio arquitetural caiu**: o bake funciona pela rota IronPython. McNeel verificada e descartada por evidência; achada e corrigida a causa de o template não remontar (**correção ainda não provada no Rhino**); separação de séries corrigida; segundo leitor do tier borda escrito. Sondagens, nenhuma rodada.
+**Última sessão:** 22/09/2026 — **a cadeia fechou ponta a ponta, medida**: `LLM → parâmetros → template → Rhino → .3dm` deu `PASSOU` no `check.py`. Dois defeitos caíram no caminho, nenhum previsto: `component_name` não identifica componente, e bake sem malha entrega arquivo que o instrumento não lê. Achado de instrumento: o log não registra chamada que falha. Sondagens, nenhuma rodada.
 
 ---
 
-## ✅ Bloqueio arquitetural RESOLVIDO — o bake existe, pela rota IronPython
+## ✅ A CADEIA FECHOU — `PASSOU` medido em 22/09
 
-Medido em 21/09, sondagem fora da série, US$ 0,44. **`clr.AddReference("Grasshopper")` funciona
-dentro do `execute_rhinoscript_python_code`**, e o `BakeGeometry` entrega geometria ao documento do
-Rhino. Confirmado por resposta do servidor lida do `logs/rhino_calls.jsonl`, não pelo relato do agente:
+`LLM → parâmetros → template → Rhino → .3dm` fecha pela primeira vez. Saída do `check.py`, que é
+a fonte de verdade:
 
 ```
-objetos bakeados: 18 · camada ESTANDE::Mobiliario (criada pelo script)
-bbox [-1200, -529.41, 0] → [1200, 300, 1100]  =  2400 × 829,41 × 1100 mm
+veredito: PASSOU
+bbox      2400,0 × 829,4 × 1100   fonte: malha
+is_solid  true       volume 1,4543·10⁹ mm³
+casco de controle (o que se mediria sem malha): 2608,4 × 2333,8
 ```
 
-**A seção 5 do PRD fica de pé.** `LLM → parâmetros → template → Rhino → .3dm` fecha, e a última
-seta é um **script versionado do harness** (`evals/bake_gh.py`), não autoria do modelo. Resolvido
-sem trocar de servidor, sem perder a baseline e sem reescrever o PRD. O plano B (abandonar o `.gh`)
-**não será executado**.
+Arquivo: `output/balcao_template_v1.3dm`. Remontagem limpa confirmada **no log**, não no relato:
+`error_count: 0`, `join` com `data_count: 1` e `is_closed: true`, `cap` com Brep `is_solid: true`
+de 6 faces.
 
-Por que a rota C# falhava e esta não: o assembly do Grasshopper está fora da compilação; IronPython
-resolve em tempo de execução. Era só isso.
+**Dois defeitos tiveram de cair, e nenhum era o previsto** (detalhe em `NOTAS.md`, 22/09):
 
-⚠️ **Três ressalvas, para não virar otimismo:** o script bakeou **tudo** que era bakeável (18
-objetos, incluindo 5 pontos e 5 arcos de construção) e produção precisa de **seletor de
-componente**; os 3 BREPs **não são sólido fechado**, porque o `Cap Holes` falhou na remontagem; e a
-bbox bater com o alvo é encorajador mas **não é prova** — é a caixa dos 18 objetos juntos. Prova só
-com `.3dm` pelo `check.py`.
+1. **`component_name` não identifica componente.** O `gh_build_graph` criou, do mesmo JSON e em
+   duas sessões, dois `Flatten Tree` diferentes — mesmo nome, mesmo nickname, mesma categoria,
+   parâmetros distintos (`Data`→`Data` em 20/09; `Tree`,`Path`→`Tree` em 22/09). O dump do canvas
+   **não expõe GUID de tipo**, só `instance_id` e `graph_id`. Corrigido com
+   `source_output_index: 0` na conexão do `flatAll`, depois de levantar os 21 componentes num
+   canvas limpo e comparar as 26 conexões campo a campo — só essa não casava.
+2. **Bake sem malha de render entrega `.3dm` que o `check.py` não mede.** Deu `INCONCLUSIVO` com
+   `2608,4 × 2333,8`, a assinatura do bug de 19/09. Sombrear o viewport não resolve. Corrigido em
+   `evals/bake_gh.py`, com `CreateMeshes(MeshType.Render, …)` + `CommitChanges()` nos objetos
+   bakeados.
 
-## 🔧 Template não remontava: causa achada e corrigida — falta provar no Rhino
+⚠️ **Três ressalvas:** ainda sobram 14 objetos de construção no arquivo (o seletor de componente
+continua não existindo, e o alvo certo foi achado por regra de desempate); `_SaveSmall=_No` **não
+é opção de `_-SaveAs` neste build** — o arquivo tem malha porque ela foi comitada no objeto, não
+porque a opção pegou, e se o padrão de SaveSmall mudar isto quebra em silêncio; e **nenhuma rodada
+de modelo aconteceu** — o placar da série v2 não mudou.
 
-**Causa:** o conversor `evals/gh_canvas_para_template.py` gravava a origem de cada conexão e
-**jogava fora de qual saída dela**. As duas linhas do perfil puxam de `End Points` — `lnS` da
-saída `Start`, `lnE` da saída `End` — e sem essa informação as duas caíam na saída 0. O perfil não
-fechava, o `Join Curves` saía com `data_count: 2` e o `Cap Holes` falhava, **cinco componentes
-adiante da causa**.
+## 🔎 Achado de instrumento: o log não registra chamada que falha
 
-Não era o `Flatten Tree`, que sempre esteve correto. A hipótese "o conversor perde informação"
-estava certa; a informação existia no `param_name` do `gh_get_canvas_state` e nunca era lida.
+O `gh_build_graph` que falhou **não está** em `logs/rhino_calls.jsonl`; o que teve sucesso, está.
+O hook é `PostToolUse` e não dispara em erro de tool.
 
-**Corrigido**, com o campo que o contrato do `gh_build_graph` define (`$defs/connection`):
+**A contagem de chamadas de toda rodada subestima**, e o que ela esconde é justamente o modo de
+falha mais interessante: tentar, errar e tentar de novo. Um agente que erra cinco vezes e acerta
+na sexta registra uma chamada. O orçamento de tool calls é critério de caso, e o número comparado
+com ele não é o número real — o que também envenena o risco "orçamento nunca pegou", mais abaixo.
 
-```json
-{"source": "ends", "source_output_name": "Start", "target": "lnS", "target_input_index": 1}
-{"source": "ends", "source_output_name": "End",   "target": "lnE", "target_input_index": 1}
-```
+## Histórico curto — como a cadeia chegou até aqui
 
-O contrato marca o campo como **opcional**; na prática ele é obrigatório para qualquer origem com
-mais de uma saída. O template regenerado tem `source_output_name` nas **26 conexões**.
+| Data | O que caiu | Detalhe |
+|---|---|---|
+| 21/09 | **O bake existe.** `clr.AddReference("Grasshopper")` funciona dentro do `execute_rhinoscript_python_code`; a rota C# falhava porque o assembly está fora da compilação e IronPython resolve em tempo de execução | `NOTAS.md` 21/09 |
+| 21/09 | **Conversor jogava fora a saída de origem.** `End Points` tem `Start` e `End`; as duas linhas do perfil caíam na saída 0, e o `Cap Holes` falhava cinco componentes adiante. Corrigido com `source_output_name` nas 26 conexões | `NOTAS.md` 21/09 |
+| 22/09 | **`component_name` é ambíguo** e **bake sem malha não é mensurável** — ver o topo | `NOTAS.md` 22/09 |
 
-Dois ganhos junto: o conversor passou a **avisar** quando uma conexão vem de origem com várias
-saídas sem dizer qual (no formato antigo, o aviso pega 5 conexões deste template), e passou a
-**preferir o alias do canvas** — `pA`, `lnS`, `ends`, `flatAll` em vez de `pt`, `pt_2`, `pt_3`.
-O slider `profundidade` virou `prof`, que é o nome real do grafo; `README.md` atualizado.
+**Caminhos encerrados**, e não são para reabrir: trocar o servidor MCP pelo da McNeel (descartado
+por evidência de código — `BakeGeometry` com 0 ocorrências, 54 tools, nenhuma bakeia); abandonar
+o `.gh` (plano B, perdeu a razão de existir); bake humano (quebra a autonomia, que é o ponto).
 
-⚠️ **Ainda não é evidência.** A correção foi testada de mesa (o instrumento pega o defeito que o
-motivou e não acusa o template correto), mas **a remontagem no Rhino não rodou**: a conexão caiu
-(`Could not connect to Rhino at 127.0.0.1:1999`). Enquanto o grafo não montar e rodar limpo, isto
-é hipótese bem fundamentada, não fato medido.
-
-### Caminhos, encerrados em 21/09
-
-| Caminho | Situação |
-|---|---|
-| **Bake por script versionado (IronPython)** | ✅ **ESCOLHIDO E VERIFICADO.** Funciona. `evals/bake_gh.py` |
-| **Trocar o servidor MCP** (`mcneel/RhinoAI`) | ❌ descartado por evidência: o oficial **não faz bake** (`BakeGeometry` com 0 ocorrências; 54 tools, nenhuma bakeia; `GH1_SolveTool.cs` opera sobre `IGH_PreviewObject`). Reavaliação **encerrada**, não adiada |
-| **Abandonar `.gh`, manter o princípio** | ❌ não será executado — o plano B perdeu a razão de existir |
-| **Bake humano** no Grasshopper | ❌ quebra a autonomia, que é o ponto do projeto |
-
-⚠️ **Tensão a controlar, agora que a rota está aberta:** isso reabre `execute_rhinoscript_python_code`, a superfície de código arbitrário que o projeto fechou de propósito (61 de 208 chamadas em script; a API inventada da 3-bis). **A trava é de disciplina:** o bake nunca é autoria do modelo — script literal e versionado, executado por passo do runner. Se um dia o agente escrever o próprio bake, a garantia da seção 5 do PRD caiu sem ninguém notar.
+⚠️ **Tensão a controlar:** a rota do bake reabre `execute_rhinoscript_python_code`, a superfície
+de código arbitrário que o projeto fechou de propósito. **A trava é de disciplina:** o bake nunca
+é autoria do modelo — script literal e versionado, enviado verbatim por passo do runner. Em 22/09
+o script foi conferido no `tool_input` do log. Se um dia o agente escrever o próprio bake, a
+garantia da seção 5 do PRD caiu sem ninguém notar.
 
 ## Próxima ação
 
-**Provar a correção do template no Rhino** — exige Rhino aberto com `mcpstart` confirmado. Três passos numa sessão só, e fecham a cadeia inteira do PRD pela primeira vez:
+**Consertar o log, antes de qualquer rodada.** O achado acima invalida a contagem de chamadas, que
+é a métrica de toda rodada. Trabalho de mesa, e é pré-requisito de medir qualquer coisa:
+registrar também as chamadas que falham. `PostToolUse` não basta — precisa de `PreToolUse`
+(registra a tentativa) ou de um par tentativa/resultado. Ao mudar, decidir se o histórico de
+391 linhas é re-interpretável ou se vira marco novo, e **dizer isso em `NOTAS.md`** — as contagens
+das 6 rodadas da v2 passam a ser limite inferior, não valor.
 
-1. `gh_create_document` (canvas limpo — não reaproveitar o velho), remontar de `balcao.json` **passando `source_output_name` verbatim**, e `gh_run_solution`. Sucesso = `error_count: 0` e `join` com `data_count: 1`.
-2. Bakear com `evals/bake_gh.py` e salvar o `.3dm`.
-3. Medir com o `check.py`, no alvo já verificado:
-   `--bbox 2400 829 1100 --tol 0.01 --layer "ESTANDE::Mobiliario"`
+Depois disso, em ordem de valor, **nenhum bloqueado**:
 
-Se o passo 3 der `PASSOU`, `LLM → parâmetros → template → Rhino → .3dm` fecha ponta a ponta pela primeira vez, e o primeiro caso de eval de template deixa de ter pré-requisito.
-
-Depois disso, em ordem de valor:
-
-1. **Seletor de componente no `evals/bake_gh.py`** — bakear a saída do alvo, não os 18 objetos do canvas inteiro. Trabalho de mesa.
-2. **Passo de bake no `evals/rodada.py`** — bake + save do `.3dm` depois de o agente terminar, antes do `check.py`. O runner fala com o agente por `subprocess` do `claude` (`evals/rodada.py:127`) e não tem cliente MCP próprio; **preferir segunda invocação `claude -p`** com prompt literal, que não acrescenta dependência. Foi assim que a sondagem rodou.
-3. **Primeiro caso de eval de template** — fecha `parâmetros → .gh → .3dm` ponta a ponta, medido pelo `check.py` como qualquer outro.
+1. **Seletor de componente no `evals/bake_gh.py`** — bakear a saída do alvo, não os 16 objetos do
+   canvas inteiro. Hoje o alvo certo é achado por regra de desempate do `check.py`, o que funciona
+   por sorte de arranjo, não por construção. Trabalho de mesa.
+2. **Regra de saída no conversor** — `source_output_name` só quando a origem tem mais de uma saída;
+   saída única usa `source_output_index`. Junto: validação de ida e volta (montar → dump → comparar
+   nomes de parâmetro), que é a única defesa contra `component_name` ambíguo. Trabalho de mesa.
+3. **Passo de bake no `evals/rodada.py`** — bake + save do `.3dm` depois de o agente terminar, antes do `check.py`. O runner fala com o agente por `subprocess` do `claude` (`evals/rodada.py:127`) e não tem cliente MCP próprio; **preferir segunda invocação `claude -p`** com prompt literal, que não acrescenta dependência. Foi assim que a sondagem rodou. Inclua o `_-SaveAs` **sem** `_SaveSmall`, que este build recusa.
+4. **Primeiro caso de eval de template** — deixou de ter pré-requisito: a cadeia está provada.
 
 Trabalho pronto para seguir, em ordem de valor, **nenhum bloqueado**:
 
@@ -138,17 +137,17 @@ O caro não é modelar, é **compor**. Isso apoia o *princípio* do PRD — tira
 | Modelo do agente | `claude-haiku-4-5-20251001` no arquivo — **use `--model sonnet` na chamada** | `.claude/settings.json` |
 | Percepção do servidor | **ligada**, mas cobertura estreita: 2 de 27 respostas na v2r1, nenhuma das tools de criação | `.mcp.json` |
 | Rota C# | **aberta** — proposta de fechar foi analisada e **rejeitada** | — |
-| Hook de log | ativo | `.claude/hooks/log_call.py` |
 | Hook de guarda | escrito e testado, **inerte** — não registrado, por decisão | `.claude/hooks/guard_call.py` |
 | Runner de rodada | exercitado em 6 rodadas; 1 defeito achado e corrigido | `evals/rodada.py` |
 | Instrumento de recusa | escrito e testado, **nunca rodou de verdade** | `julga_recusa()` |
 | Segundo leitor (Jev) | **aditivo**, nunca decide. Lógica testada offline; chamada real **nunca feita** | `julga_recusa_jev()` |
-| **Bake do Grasshopper** | ✅ **funciona** (IronPython, `clr.AddReference`). Verificado 21/09. Falta seletor de componente e o passo no runner | `evals/bake_gh.py` |
-| Template Grasshopper | `balcao.json` **não remonta**: `Cap Holes` falha, `Join Curves` sai com 2 ramos. Bloqueio aberto | `gh-templates/` |
+| **Bake do Grasshopper** | ✅ **funciona e entrega arquivo mensurável** (IronPython + malha de render comitada). Falta seletor de componente e o passo no runner | `evals/bake_gh.py` |
+| Template Grasshopper | ✅ **`balcao.json` remonta, resolve limpo e mede `PASSOU`** (22/09). Saída única agora por índice | `gh-templates/` |
+| Hook de log | ativo, mas **cego a chamada que falha** — `PostToolUse` não dispara em erro. Contagem subestima | `.claude/hooks/log_call.py` |
 | `check.py` | lê Brep, Mesh e SubD; envelope min/max; `--solido`; histórico re-medido | `evals/check.py` |
 | Skill | **`21a31ea`** — mudou 2× na série v2: `e404dd2` (candidata nº 7, salvar) e `21a31ea` (candidata nº 11, prefixo de traço) | `.claude/skills/rhino-nurbs/` |
 
-**Marco do log:** `logs/rhino_calls.jsonl` tem **391 linhas** (385 + 6 da sondagem de bake). O runner faz essa conta sozinho.
+**Marco do log:** `logs/rhino_calls.jsonl` tem **431 linhas** (391 + 1 de sessao perdida + 39 da sondagem de 22/09). O runner faz essa conta sozinho. ⚠️ **O marco conta chamadas bem-sucedidas apenas** — ver o achado de instrumento acima.
 
 ---
 
@@ -166,7 +165,7 @@ Uma sondagem fora da série (sessão `25491602`, US$ 0,58) pediu uma divisória 
 
 1. ~~**check por faixa**~~ **Feito.** `--bbox-max` / `--bbox-min` por eixo, `0` = sem limite. A peça do coral, que reprovava por 19,3%, agora passa; e reprova de verdade quando estoura um teto real.
 2. ~~**ler Mesh e SubD**~~ **Feito.** Mesh medida de verdade (bbox e volume por divergência, sólido por `IsClosed`); SubD mede caixa de controle como limite superior e **não mede volume** — o `rhino3dm` não expõe a superfície limite, e fingir precisão aí repetiria o bug de 19/09. Histórico re-medido, nenhum veredito mudou.
-3. ~~**A rota `gh_*` não aparece sozinha.**~~ **Resolvido, e revelou coisa pior.** O agente usou as tools `gh_*` assim que recebeu a tarefa de construir um template, e montou o grafo sem dificuldade. O que ele não consegue é **tirar a geometria de lá** — ver o bloqueio no topo.
+3. ~~**A rota `gh_*` não aparece sozinha.**~~ **Resolvido, e revelou coisa pior.** O agente usou as tools `gh_*` assim que recebeu a tarefa de construir um template, e montou o grafo sem dificuldade. O que ele não conseguia era **tirar a geometria de lá**; resolvido em 21–22/09.
 
 4. ~~**exigência de sólido fechado**~~ **Feito.** O `check.py` reprovava `IsSolid = false` incondicionalmente, e uma vela é superfície aberta por definição — hypar perfeito dava `FALHOU`. Agora `--solido {fechado|aberto|qualquer}`, vindo de `check.is_solid` no caso.
 
@@ -180,32 +179,33 @@ Uma sondagem fora da série (sessão `25491602`, US$ 0,58) pediu uma divisória 
 
 ## Em voo
 
-- 🔴 **A correção do template nunca foi provada no Rhino.** Está commitada e testada de mesa, mas a remontagem não chegou a rodar: primeiro o Rhino caiu, depois um **incidente da Anthropic** derrubou o caminho `claude -p` (500 em qualquer prompt, inclusive `"diga apenas OK"`; status.claude.com confirmou *partial outage* de Claude Code e API em 21–22/09). **É a primeira coisa a fazer na próxima sessão** — o prompt já está desenhado, com parada condicional antes do bake.
+- ✅ ~~A correção do template nunca foi provada no Rhino.~~ **Provada em 22/09**, e revelou dois defeitos novos — ver o topo deste documento.
 - **Smoke test do Jev** — já desbloqueado (chave no ambiente), ainda não executado.
 - A skill está estável em `21a31ea`, intocada. As rodadas estão registradas.
-- **1 commit local não enviado**: `59ed854` (correção do conversor). Os anteriores foram para o GitHub em 21/09.
+- **3 commits locais não enviados**: `59ed854`, `7a8d407` e o de 22/09. Os anteriores foram para o GitHub em 21/09.
+- **Os prompts das sondagens não estão versionados.** O de 21/09 ("já desenhado") morreu com o contexto da sessão e teve de ser reescrito. Prompt de sondagem é instrumento: ou vai para `PROMPTS.md`, ou se perde.
 - O `supervisor` ganhou remoto **privado** (`elisacosta116-sudo/supervisor`, branch `master`), com os 4 commits enviados. Era o único trabalho sem cópia fora do disco.
 
-## Fechado nesta sessão
+## Fechado nesta sessão — 22/09
 
-- **Causa de o template não remontar, achada e corrigida:** o conversor descartava a saída de origem das conexões (`End Points` tem `Start` e `End`; as duas linhas do perfil caíam na saída 0). Agora usa `source_output_name`, campo que o contrato do `gh_build_graph` já define, nas 26 conexões — mais rede de segurança contra conexão ambígua e aliases legíveis de volta. **Não provado no Rhino**, ver "Em voo".
-- ✅ **O bloqueio arquitetural de 20/09 caiu.** O bake funciona pela rota IronPython: 18 objetos entregues ao documento do Rhino, bbox 2400 × 829,41 × 1100, confirmado pela resposta do servidor no log — não pelo relato do agente. Custo total da sondagem: **US$ 0,44**, 6 chamadas MCP. A seção 5 do PRD fica de pé e o plano B foi arquivado.
-- 🛑 **Bloqueio novo, e ataca a aposta do PRD:** o `balcao.json` **não remonta** — `Cap Holes` falha porque o `Join Curves` sai com 2 ramos, apesar de o `Flatten Tree` estar presente e bem ligado. O JSON versionado não reproduz o grafo que funcionou. É a próxima ação.
-- **`evals/bake_gh.py`** — script de bake versionado, camada por parâmetro. Enviado verbatim pelo agente (conferido no `tool_input.code` do log).
-- **Servidor da McNeel verificado e descartado por evidência de código.** `BakeGeometry`: 0 ocorrências; 54 tools inventariadas, nenhuma bakeia; `GH1_SolveTool.cs` opera sobre pré-visualização. A reavaliação do servidor MCP está **encerrada, não adiada**. Detalhe em `NOTAS.md`, 21/09.
-- **Caminho novo descoberto:** bake é capacidade do plugin, não do protocolo. A rota `execute_rhinoscript_python_code` (IronPython 2.7, em processo, `clr.AddReference` em tempo de execução) nunca foi tentada, e contorna exatamente o motivo da falha do C#. Sondagem pendente.
-- **Terceiro defeito de instrumento corrigido:** o `cases.jsonl` separava séries pela caixa da palavra do veredito, e a `rodada 4` antiga está em maiúscula — inflava a v2 em um PASSOU. Agora há campo `serie` explícito em todo registro de `historico`; nenhum outro campo tocado (verificado por diff registro a registro). A skill de onboarding foi corrigida junto.
-- **Divergências documento × disco corrigidas** neste arquivo: 14 casos escritos (não 13), 10 nunca rodados (não 9), hash da skill `21a31ea` (não `200f2e5`), plugin `typesafe` desabilitado, item 1 do roteiro vencido, dois riscos obsoletos.
-- **Achado: o instrumento de recusa tinha viés para falso `PASSOU`.** `julga_recusa()` casa substring, e **substring não lê negação** — `"nao e impossivel, entao fiz uma aproximacao"` casa com o sinal `impossivel` e aprova uma rodada que fez exatamente o que o caso proíbe. Como o `impossivel_01` declara 8 sinais, vários genéricos, o risco de aprovação perdida é baixo e o risco concentrado é o falso positivo. **Direção oposta ao viés de 19/09**, quando o instrumento reprovava geometria correta. A lição: todo instrumento novo precisa de um caso de teste que tente enganá-lo.
-- **Segundo leitor escrito, aditivo por construção:** `julga_recusa_jev()` + `compara_com_jev()` em `evals/rodada.py`. Três Nouls numa requisição (`recusou_a_tarefa`, `motivo_geometrico_correto`, `parou_por_obstaculo_tecnico`). Roda depois do veredito mecânico, não altera veredito, não derruba rodada, e `FALHOU` por artefato nunca passa por modelo. A terceira pergunta nomeia a dúvida que o `INCONCLUSIVO` só descrevia em prosa.
-- **Lógica testada offline em 5 caminhos**, incluindo o falso positivo acima, que sai como `DIVERGENCIA FORTE`. O caminho feliz não foi testado: não havia chave.
-- **Decisão registrada:** o Jev resolve o problema de *interface* (resposta tipada em vez de texto para parsear), não o de verdade — os docs da TypeSafe dizem *"typed output guarantees the interface, not truth"*. Por isso não vira veredito. O `check.py` com `rhino3dm` continua sendo a fonte de verdade da geometria, e **pôr modelo ali seria rebaixar o instrumento**.
-- Documentação: `NOTAS.md` (seção de 21/09), `OPERACAO.md` (§3 passo 2-bis, chave e comando), `HARNESS.md` (camada 4, os dois instrumentos).
-- Segurança: o repositório é **público**; `.env` e `.env.*` no `.gitignore`, varredura do histórico sem nenhuma ocorrência de chave, chave em variável de ambiente de usuário via `setx`.
-- Plugin `typesafe@typesafe-ai` instalado no escopo de usuário (1 skill, 0 hooks, 0 MCP servers). **Está desabilitado** (`claude plugin list` → `✘ disabled`, verificado 21/09), então não há os ~207 tok sempre-presentes no contexto do agente — a variável de eval não existe hoje. **Não é dependência do harness**: o runner usa o SDK Python direto.
-- Os 16 commits pendentes de 20/09 foram enviados ao GitHub (`200f2e5..df0d2bf`).
-
----
+- ✅ **A cadeia fechou ponta a ponta, medida.** `PASSOU` no `check.py`, bbox pela malha,
+  sólido fechado. Ver o topo.
+- **Defeito de formato achado: `component_name` não identifica componente.** Dois `Flatten Tree`
+  distintos do mesmo JSON, em duas sessões, sem GUID de tipo no dump para desempatar. Corrigido
+  pontualmente com `source_output_index: 0`; a regra geral (índice para saída única, nome só para
+  desambiguar) ainda **não está no conversor**.
+- **Defeito de instrumento achado: bake sem malha de render entrega `.3dm` que o `check.py` não
+  mede.** Corrigido em `evals/bake_gh.py`. Sombrear o viewport não resolve — testado.
+- **Defeito de instrumento achado, ainda ABERTO: o log é cego a chamada que falha.** `PostToolUse`
+  não dispara em erro de tool. É a próxima ação.
+- **Método que funcionou, e vale repetir:** prompt de sondagem com **parada condicional explícita**
+  (*"se falhar, relate e pare; diagnosticar é trabalho do supervisor"*). O agente parou quatro
+  vezes em vez de improvisar — inclusive recusando-se a relatar um `object_count` porque isso
+  implicaria que um save duvidoso era confiável. Nos três casos o relato bateu com o log.
+- **Levantamento antes de mexer:** os 21 componentes foram criados num canvas limpo **sem conexão
+  nenhuma** e comparados campo a campo com o template, para saber se o `flatAll` era exceção ou
+  regra. Era exceção — 1 de 26. Sem isso, a correção teria sido chute.
+- Custo da sessão: **US$ 1,69**, 8 invocações `claude -p`, nenhuma rodada de modelo.
 
 ## Roteiro, em ordem
 
@@ -213,16 +213,23 @@ Uma sondagem fora da série (sessão `25491602`, US$ 0,58) pediu uma divisória 
 2. **Rodada tipada** — uma rodada que tente a rota tipada até o fim (`create_object type=ARC` → `offset_curve` → fechar o perfil), para descobrir se `create_planar_region` dispensa o join que não existe tipado. É o que decide se a rota C# é necessária ou apenas conveniente.
 3. **Capturar os 5 tópicos de guidance que faltam** (`transforms`, `planar_regions`, `organization`, `verification`, `recovery`). Exige Rhino aberto; procedimento em `references/guidance/README.md`. O `verification` nunca foi lido em 217 chamadas.
 4. **Candidata nº 7** — obrigar o save.
-5. **Fechar as 2 lacunas do `check.py`** — escolha do Brep alvo e arquivo sem malha de render. Trabalho de mesa. Ao mudar o instrumento, re-medir o histórico inteiro.
+5. **Fechar a lacuna que sobrou do `check.py`** — escolha do Brep alvo. A outra (*arquivo sem malha de render*) foi atacada pelo lado do bake em 22/09, não pelo lado do check: o `check.py` continua sem saber medir Brep aparado sem malha, e **só não dói porque o bake agora sempre gera malha**. Arquivo vindo de outra fonte ainda cai no casco de controle. Ao mudar o instrumento, re-medir o histórico inteiro.
 6. **Escrever os casos de eval restantes** — 14 de ~30 escritos. Pré-requisito do piloto.
-7. **Construir os 4 primeiros templates** — balcão, arco, painel, totem. **O formato depende da sondagem do bake**: `.gh` se a rota IronPython alcançar, script versionado com schema se não.
+7. **Construir os 4 primeiros templates** — balcão, arco, painel, totem. **Formato decidido:** `.gh` via JSON versionado; a rota IronPython alcançou e o balcão mediu `PASSOU`. Cada template novo só conta como versionado depois de **remontado, resolvido e medido** — converter sem erro não prova nada, e `component_name` ambíguo garante que aí haverá surpresa.
 8. **Medir os dois números da seção 1 do PRD** — tempo por proposta e variações por cliente.
 
 ## Riscos abertos
 
 - **Comando interativo do Rhino trava a sessão e o MCP não cancela.** Na v2r2 um `_Arc` sem prefixo de traço ficou pendurado com linha elástica no viewport, bloqueou o `run_command` seguinte e só saiu com `Esc` humano. **Numa rodada autônoma isso trava tudo a partir dali.** Candidata nº 11 ataca a causa; não há mitigação para o caso de acontecer mesmo assim.
-- **Orçamento de tool calls nunca pegou:** 45 → 25 → 68 → 9 → 27 → 36. E a rodada aprovada gastou 36 contra um limite de 25 — não se sabe se a regra está sendo ignorada ou se o número está errado.
+- **Orçamento de tool calls nunca pegou:** 45 → 25 → 68 → 9 → 27 → 36. E a rodada aprovada gastou 36 contra um limite de 25 — não se sabe se a regra está sendo ignorada ou se o número está errado. **Pior desde 22/09:** esses seis números contam só chamadas bem-sucedidas, então são **limite inferior**. O gasto real foi maior, e não se sabe quanto.
 
+- **O template versionado não é reprodutível por construção — só por verificação.** `component_name`
+  é ambíguo e o dump do canvas não traz GUID de tipo, então o mesmo JSON pode montar grafos
+  diferentes em sessões diferentes (provado em 22/09 com o `Flatten Tree`). O PRD encosta a aposta
+  em *"é diffável no git, é exatamente o que `gh_build_graph` consome"* — verdadeiro sobre o
+  formato, **frágil sobre o conteúdo**. Mitigação hoje: nenhuma automática; só a disciplina de
+  remontar-e-medir todo template antes de confiar nele. Mitigação real exigiria o servidor expor
+  GUID de tipo, que é pedido a montante.
 - **`dev/.claude/settings.json` não está sob controle de versão.** É o que impede o supervisor de mexer nas travas do operador. Há cópia rastreada em `supervisor/travas-do-supervisor.json`; re-copie ao mudar.
 - **O `guard_call.py` tem dois defeitos conhecidos** antes de qualquer reconsideração: falha fechada se o log ficar sem escrita, e lê o log inteiro a cada chamada (1,37 MB hoje, por causa dos PNG em base64 do `capture_viewport`).
 - **4 casos rodados de 14 escritos**, para um alvo de ~30. Cinco aprovações não são taxa de aprovação: 10 casos nunca rodaram, e 12 dos 14 escritos são do tier fácil.

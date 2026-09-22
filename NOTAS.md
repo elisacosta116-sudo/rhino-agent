@@ -230,6 +230,127 @@ O servidor põe `include_delta` e `include_health` no envelope de toda mutação
 
 Nada mais mudou. A skill está em `200f2e5`, intocada.
 
+## ✅ A CADEIA FECHOU PONTA A PONTA — `PASSOU` medido — 22/09
+
+> Sondagem fora da série, sem veredito de modelo. Oito invocações `claude -p`, **US$ 1,69**.
+> Log: 392 → 431 linhas (39 chamadas registradas; as que falharam não entraram — ver achado
+> de instrumento abaixo). A variável não era o modelo; era o harness.
+
+### O resultado
+
+`LLM → parâmetros → template → Rhino → .3dm` fecha pela primeira vez, medido pelo `check.py`:
+
+```
+veredito: PASSOU
+bbox      2400,0 × 829,4 × 1100   fonte: malha
+is_solid  true       volume 1,4543·10⁹ mm³
+casco de controle (o que se mediria sem malha): 2608,4 × 2333,8
+```
+
+Dois defeitos tiveram de cair no caminho, e nenhum dos dois era o previsto.
+
+### Defeito 1 — `component_name` não identifica componente
+
+A remontagem falhou **antes** de rodar, no `gh_build_graph`:
+`Could not find output parameter on source component 'Flatten'.`
+
+O template pedia a saída `Data` do `flatAll`. Confirmado no `_canvas_bruto.json`: a saída **é**
+`Data` (nickname `D`, descrição *"Squished data"*). O conversor gravou certo. O servidor é que
+criou outro componente:
+
+| | inputs | output |
+|---|---|---|
+| canvas de 20/09 | `Data` | `Data` — *"Squished data"* |
+| servidor em 22/09 | `Tree`, `Path` | `Tree` — *"Flattened data tree"* |
+
+Mesmo `name` (`Flatten Tree`), mesmo `nickname` (`Flatten`), mesma `category/subcategory`
+(`Sets/Tree`) — **componentes diferentes**. E os dois canvases foram montados pelo próprio
+`gh_build_graph` (`graph_id: MCPGraph_*`), do mesmo JSON.
+
+**A resolução por nome de exibição é ambígua e devolveu componentes diferentes em duas sessões,
+sem o JSON mudar.** O `gh_get_canvas_state` não expõe GUID de *tipo* — só `instance_id` (por
+instância) e `graph_id` (por montagem), nenhum dos dois estável entre documentos. **O template
+não tem como dizer qual componente quer.**
+
+Isso é a lição de 21/09 um nível abaixo. Lá, o conversor jogava fora informação que existia.
+Aqui, **a informação não existe no dump** — e o `README` do `gh-templates/` promete
+reprodutibilidade que o formato não pode sustentar sozinho.
+
+**Correção aplicada, mínima:** `Flatten Tree` tem saída única nas duas variantes, então o índice
+é estritamente mais robusto que o nome. Uma linha em `gh-templates/balcao.json`:
+
+```diff
+-      "source_output_name": "Data",
++      "source_output_index": 0,
+```
+
+Levantamento completo antes de mexer: os 21 componentes foram criados num canvas limpo **sem
+nenhuma conexão** e o `gh_get_canvas_state` comparado campo a campo com o template. Das 26
+conexões, **só o `flatAll` não casava**. Os 5 sliders/Panel são `standalone_parameters`, não
+têm lista `outputs`, e o servidor aceita o que o conversor põe ali.
+
+**A regra que sai disto:** `source_output_name` só quando a origem tem **mais de uma** saída;
+saída única usa `source_output_index: 0`. O nome serve para desambiguar, e desambiguar é a única
+coisa que ele faz bem — identificar, não.
+
+### Defeito 2 — bake sem malha entrega arquivo que o instrumento não lê
+
+Remontado e resolvido limpo (`error_count: 0`, `join` com `data_count: 1` e `is_closed: true`,
+`cap` com Brep `is_solid: true`, 6 faces — tudo lido do log, não do relato), o bake rodou e o
+`.3dm` saiu **`INCONCLUSIVO`**, com `2608,4 × 2333,8`. É a assinatura literal do bug de
+instrumento de 19/09: sem malha de render, o `rhino3dm` só entrega o casco dos pontos de
+controle, que é limite superior.
+
+Verificado no arquivo: **zero malhas**, em `Render`, `Analysis`, `Preview` e `Any`.
+
+Sombrear o viewport (`_-SetDisplayMode _Mode=_Shaded`, `_-SelAll`, `_-Zoom`, `_-Save`) **não
+resolveu** — segunda medição idêntica. A malha precisa existir *no objeto* e ser comitada.
+
+**Correção aplicada em `evals/bake_gh.py`**, que é o lugar certo: quem bakeia é quem deve
+entregar arquivo mensurável.
+
+```python
+mp = Rhino.Geometry.MeshingParameters.DocumentCurrentSetting(doc_rh)
+for gid in ids:
+    ro = doc_rh.Objects.FindId(gid)
+    if ro and ro.CreateMeshes(Rhino.Geometry.MeshType.Render, mp, False) > 0:
+        ro.CommitChanges()
+```
+
+Saiu `objetos com malha de render: 2` — os 2 Breps; pontos e curvas não têm malha, e não
+precisam. A medição seguinte deu `PASSOU`.
+
+### Achado de instrumento: o log não registra chamada que falha
+
+O `gh_build_graph` do defeito 1 **não aparece** em `logs/rhino_calls.jsonl`. O que teve sucesso,
+aparece. O hook é `PostToolUse` e não dispara em erro de tool.
+
+**Consequência, e não é pequena:** a contagem de chamadas de toda rodada **subestima**, e o modo
+de falha mais interessante — o agente tentar, errar e tentar de novo — é justamente o invisível.
+Um agente que erra cinco vezes e acerta na sexta registra uma chamada. Some-se a isso que o
+orçamento de tool calls é critério de caso, e o número que se compara com ele não é o número real.
+
+### Ressalvas, para não virar otimismo
+
+1. **Ainda sobra geometria de construção.** 16 objetos bakeados, 2 mensuráveis; o `check.py`
+   avisa *"sobrou geometria de construcao"*. O seletor de componente continua não existindo.
+   O alvo foi escolhido certo (`malha > sólido fechado > maior caixa` pegou o Brep do `cap`),
+   mas por regra de desempate, não porque o bake entregou só o que importa.
+2. **`_SaveSmall=_No` não é opção de `_-SaveAs` neste build.** O Rhino salvou e depois reclamou
+   `Unknown command: _SaveSmall=_No`. O arquivo tem as malhas porque elas foram comitadas no
+   objeto, não porque a opção pegou. Se algum dia o padrão de SaveSmall virar `Yes`, isto
+   quebra silenciosamente e volta o `INCONCLUSIVO`.
+3. **Nenhuma rodada de modelo aconteceu.** Isto é harness. O placar da série v2 não mudou.
+
+### O que o agente fez bem, e vale registrar
+
+Parou **quatro vezes** em vez de improvisar: no `gh_build_graph` que falhou, no
+`gh_create_document` que devolveu `created: false` com 21 objetos de sondagem anterior, e no
+`_SaveSmall` recusado — neste último recusando-se inclusive a relatar o `object_count`, com o
+argumento de que relatar implicaria que o save era confiável. Prompt com parada condicional
+explícita produziu relato fiel de máquina, que foi o que permitiu diagnosticar. Nos três casos
+o relato do agente bateu com o log.
+
 ## POR QUE O TEMPLATE NÃO REMONTAVA: a saída de origem, jogada fora — 21/09
 
 > Trabalho de mesa. A remontagem no Rhino **não chegou a rodar** — a conexão caiu
