@@ -1,0 +1,35 @@
+# Sondagem: remonta gh-templates/balcao.json num canvas limpo e roda a solucao.
+# Para antes do bake, de proposito -- ver PROMPTS.md secao 9, "a parada condicional".
+# Usado em 22/09. Sucesso medido: error_count 0, join data_count 1 e is_closed true.
+
+Tarefa de INFRAESTRUTURA, nao de modelagem. Execute a risca e nao improvise.
+
+1. Chame gh_create_document e, em seguida, gh_clear_canvas. O canvas TEM de comecar vazio:
+   ha' componentes de uma sondagem anterior nele, e limpa-los esta' AUTORIZADO.
+   Confirme que o object_count esta' em 0 antes de seguir.
+
+2. Leia o arquivo gh-templates/balcao.json deste repositorio.
+
+3. Chame gh_build_graph passando os 21 componentes e as 26 conexoes EXATAMENTE como estao no
+   arquivo. Em especial: cada conexao tem um campo "source_output_name" -- envie esse campo
+   VERBATIM em todas as 26. Nao omita, nao reordene, nao renomeie alias, nao acrescente nem
+   remova componente ou conexao, nao "corrija" nada.
+
+4. Chame gh_run_solution.
+
+5. Chame gh_get_canvas_state e me relate, literalmente, sem interpretar:
+   - error_count e warning_count da solucao
+   - toda mensagem de erro ou aviso, dizendo de qual componente veio
+   - o data_count da saida do componente de alias "join"
+   - o data_count da saida do componente de alias "cap", e o tipo do dado
+
+PARE AQUI.
+
+Nao bakeie. Nao salve arquivo .3dm. Nao execute script nenhum (nem rhinoscript, nem C#).
+Nao conserte o grafo, nao mexa em fiacao, nao troque componente e nao tente rota alternativa
+se algo falhar. Se falhar, relate o que falhou, onde, e pare.
+
+Diagnosticar e decidir o proximo passo e' trabalho do supervisor, nao seu. Relatorio fiel de
+maquina vale mais aqui do que iniciativa.
+
+Criterio de sucesso, so para voce saber o que observar: error_count 0 e o "join" com data_count 1.

@@ -1,0 +1,100 @@
+# GERADO -- nao edite o bloco SCRIPT a mao.
+# O trecho entre <<<SCRIPT e SCRIPT e' a saida literal de:
+#     python evals/bake_gh.py --layer "ESTANDE::Mobiliario"
+# Ao mudar o bake_gh.py, REGENERE este arquivo. Script divergente aqui quebra a
+# disciplina que o bake_gh.py existe para sustentar: o modelo nunca e' autor do bake.
+#
+# Usado na sondagem de 22/09, que fechou a cadeia ponta a ponta. Ver NOTAS.md, 22/09.
+
+Tarefa de INFRAESTRUTURA. Execute a risca. O script abaixo e' do harness, versionado e
+revisado: envie-o VERBATIM, sem reescrever, sem otimizar, sem adaptar. Voce NAO e' autor dele.
+
+O documento do Rhino tem 16 objetos de um bake anterior. Apaga-los esta' AUTORIZADO -- e' preciso,
+senao o novo bake duplica a geometria. NAO mexa no canvas do Grasshopper: o grafo ja' esta'
+montado e resolvido, e tem de continuar como esta'.
+
+1. run_command com prefixo de traco: _-SelAll _Enter
+   depois run_command: _-Delete _Enter
+   Confirme com get_document_summary que object_count e' 0. Se nao for, PARE e relate.
+
+2. NAO chame gh_clear_canvas, gh_build_graph nem gh_run_solution.
+
+3. Chame execute_rhinoscript_python_code com EXATAMENTE este codigo, caractere por caractere:
+
+<<<SCRIPT
+
+import clr
+clr.AddReference("Grasshopper")
+import Grasshopper as gh
+import Rhino, System
+
+canvas = gh.Instances.ActiveCanvas
+doc_gh = canvas.Document if canvas else None
+
+if doc_gh is None:
+    print("ERRO: nenhum documento do Grasshopper aberto no canvas")
+else:
+    doc_rh = Rhino.RhinoDoc.ActiveDoc
+    nome_camada = "ESTANDE::Mobiliario"
+
+    # Camada de destino: reaproveita se existir, cria (com os pais) se nao.
+    indice = -1
+    if nome_camada:
+        indice = doc_rh.Layers.FindByFullPath(nome_camada, -1)
+        if indice < 0:
+            indice = doc_rh.Layers.AddPath(nome_camada)
+
+    att = doc_rh.CreateDefaultAttributes()
+    if indice >= 0:
+        att.LayerIndex = indice
+
+    ids = []
+    bakeaveis = 0
+    for obj in doc_gh.Objects:
+        if not isinstance(obj, gh.Kernel.IGH_BakeAwareObject):
+            continue
+        if not obj.IsBakeCapable:
+            continue
+        bakeaveis += 1
+        guids = System.Collections.Generic.List[System.Guid]()
+        obj.BakeGeometry(doc_rh, att, guids)
+        ids.extend(list(guids))
+
+    # Malha de render, sem a qual o .3dm nao e' mensuravel.
+    # O `check.py` mede Brep pela malha; sem ela cai no casco de controle dos
+    # pontos de controle, que e' LIMITE SUPERIOR, e devolve INCONCLUSIVO --
+    # foi o bug de instrumento de 19/09 (2608,4 x 2333,8). Bakear sem malha
+    # entrega arquivo que o instrumento nao consegue ler.
+    # Sombrear o viewport NAO basta: a malha precisa existir no objeto e ser
+    # comitada, e o save precisa ser com SaveSmall desligado.
+    mp = Rhino.Geometry.MeshingParameters.DocumentCurrentSetting(doc_rh)
+    com_malha = 0
+    for gid in ids:
+        ro = doc_rh.Objects.FindId(gid)
+        if ro is None:
+            continue
+        if ro.CreateMeshes(Rhino.Geometry.MeshType.Render, mp, False) > 0:
+            ro.CommitChanges()
+            com_malha += 1
+
+    doc_rh.Views.Redraw()
+    print("componentes bakeaveis: %d" % bakeaveis)
+    print("objetos bakeados: %d" % len(ids))
+    print("objetos com malha de render: %d" % com_malha)
+    print("camada: %s (indice %d)" % (nome_camada or "(padrao)", indice))
+SCRIPT
+
+4. Relate literalmente as QUATRO linhas que o script imprime.
+
+5. Salve com run_command, prefixo de traco e SaveSmall desligado, para nao descartar as malhas:
+   _-SaveAs "C:\Users\eacosta\dev\rhino-agent\output\balcao_template_v1.3dm" _Enter
+   Se pedir confirmacao de sobrescrita, responda _Yes.
+   NAO use _SaveSmall=_No: este build do Rhino recusa a opcao no _-SaveAs ("Unknown command").
+   A malha sobrevive porque o script a comita no objeto, nao pela opcao de save.
+
+6. Chame get_document_summary e relate object_count, objects_by_type e model_bounding_box.
+
+Se algum run_command ficar pendurado esperando entrada, relate e pare imediatamente.
+
+PARE AQUI. Nao modele, nao conserte geometria, nao rode a solucao de novo.
+Se qualquer passo falhar, relate o erro literal e pare.
