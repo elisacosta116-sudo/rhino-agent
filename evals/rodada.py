@@ -28,6 +28,7 @@ marcado como indisponivel. Nenhuma falha desse leitor derruba a rodada.
 """
 
 import argparse
+import collections
 import datetime
 import io
 import json
@@ -66,6 +67,79 @@ def linhas_do_log():
         return 0
     with LOG.open(encoding="utf-8") as f:
         return sum(1 for linha in f if linha.strip())
+
+
+def conta_chamadas(marco):
+    """Chamadas MCP depois do marco: tentativas, concluidas e quais falharam.
+
+    O log tem duas fases por chamada (ver `.claude/hooks/log_call.py`):
+    PreToolUse e' a TENTATIVA e dispara sempre; PostToolUse e' o RESULTADO e so
+    dispara em sucesso. Tentativa sem resultado de mesmo `tool_use_id` E' a
+    chamada que falhou.
+
+    **A contagem da rodada e' `tentativas`, nao `concluidas`.** Ate 22/09 era o
+    contrario, sem alternativa: so havia PostToolUse no log. As contagens das
+    seis rodadas da serie v2 (45, 25, 68, 9, 27, 36) sao LIMITE INFERIOR, nao
+    valor, e nao sao comparaveis com as daqui para a frente.
+
+    `cego_a_falha` marca a rodada que caiu no formato antigo -- hook de
+    PreToolUse nao registrado no settings.json. Ai o numero volta a ser limite
+    inferior, e a rodada tem de dizer isso em vez de fingir precisao.
+    """
+    tentativas = []          # (tool_use_id, tool_name), na ordem
+    resultados = set()
+    concluidas = 0
+
+    if LOG.exists():
+        with LOG.open(encoding="utf-8") as f:
+            for i, linha in enumerate(f):
+                if i < marco or not linha.strip():
+                    continue
+                try:
+                    d = json.loads(linha)
+                except ValueError:
+                    continue          # linha truncada nao derruba a contagem
+                fase = d.get("hook_event_name")
+                uid = d.get("tool_use_id")
+                if fase == "PreToolUse":
+                    tentativas.append((uid, d.get("tool_name") or "?"))
+                elif fase == "PostToolUse":
+                    concluidas += 1
+                    if uid:
+                        resultados.add(uid)
+
+    if not tentativas:
+        # Formato antigo: so resultado. Nao da' para saber o que falhou.
+        return {"tentativas": concluidas, "concluidas": concluidas,
+                "falhas": [], "cego_a_falha": True}
+
+    falhas = [nome for uid, nome in tentativas
+              if uid and uid not in resultados]
+    return {"tentativas": len(tentativas), "concluidas": concluidas,
+            "falhas": falhas, "cego_a_falha": False}
+
+
+def _linha_chamadas(reg):
+    """Como as tool calls aparecem no bloco de NOTAS.md.
+
+    Um numero solto esconde de que numero se trata. Rodada medida com o log
+    cego (ate 22/09) nao e' comparavel com rodada medida depois, e o bloco tem
+    de dizer isso onde alguem vai ler, nao so' no JSON do caso.
+    """
+    n = reg.get("tool_calls_mcp")
+    # AUSENTE significa CEGO, nao limpo: registro sem o campo e' anterior a
+    # 22/09, quando so' havia PostToolUse no log. Ler ausencia como "todas
+    # concluidas" carimbaria de exato justamente o numero que nao e'.
+    if reg.get("log_cego_a_falha", True):
+        return f"{n} concluidas — **limite inferior**, log cego a falha"
+    falhas = reg.get("tool_calls_falharam") or []
+    if falhas:
+        vezes = collections.Counter(falhas)
+        nomes = ", ".join(f"{k}{'' if v == 1 else f' x{v}'}"
+                          for k, v in sorted(vezes.items()))
+        return (f"{n} tentativas, {reg.get('tool_calls_concluidas')} concluidas, "
+                f"**{len(falhas)} falharam** ({nomes})")
+    return f"{n} tentativas, todas concluidas"
 
 
 def carrega_casos():
@@ -406,7 +480,8 @@ def bloco_notas(reg, caso):
         f"## Rodada {reg['rodada']}",
         "",
         f"- **Modelo:** {reg['modelo']} · **Sessao:** `{reg.get('sessao') or '?'}`",
-        f"- **Tool calls:** {reg['tool_calls_mcp']} (orcamento {caso['check'].get('max_tool_calls', '-')})",
+        f"- **Tool calls:** {_linha_chamadas(reg)} "
+        f"(orcamento {caso['check'].get('max_tool_calls', '-')})",
         f"- **Turnos:** {reg.get('num_turns')} · **{reg.get('duration_ms', 0) / 1000:.1f} s** · "
         f"**US$ {reg.get('custo_usd') or 0:.4f}**",
         f"- **Arquivo:** `{reg.get('artefato') or 'NENHUM'}`",
@@ -476,12 +551,33 @@ def main():
         print(json.dumps(r, ensure_ascii=False, indent=2))
         sys.exit("o `claude` nao devolveu JSON: rodada nao avaliavel")
 
-    tool_calls = linhas_do_log() - marco
+    chamadas = conta_chamadas(marco)
+    tool_calls = chamadas["tentativas"]
     num_turns = r.get("num_turns")
     print(f"-- turnos {num_turns} · tool calls MCP {tool_calls} · "
           f"{r.get('duration_ms', 0) / 1000:.1f}s · US$ {r.get('total_cost_usd') or 0:.4f}")
 
+    if chamadas["cego_a_falha"]:
+        print("-- ATENCAO: log sem PreToolUse. A contagem acima e' LIMITE INFERIOR,")
+        print("   nao valor: chamada que falha nao aparece. Registre o hook de")
+        print("   PreToolUse no .claude/settings.json antes de comparar com orcamento.")
+    elif chamadas["falhas"]:
+        falhas = chamadas["falhas"]
+        print(f"-- {len(falhas)} de {tool_calls} chamadas FALHARAM "
+              f"({chamadas['concluidas']} concluidas):")
+        for nome in falhas:
+            print(f"     {nome}")
+        print("   Tentar-errar-tentar de novo e' dado da rodada, nao ruido.")
+
     # Passo 4 do protocolo: validar se foi rodada, ANTES de ler qualquer resultado.
+    #
+    # `tentativas` e' o criterio certo aqui, e nao `concluidas`: um agente cujas
+    # chamadas TODAS falharam tocou no Rhino e a rodada e' valida -- e' falha de
+    # verdade, com causa no log. Contando so o que concluiu, essa rodada
+    # aparecia como 0 chamadas e virava ANULADA, atribuindo a Rhino fechado ou
+    # contaminacao de contexto o que era resultado legitimo do modelo. O erro
+    # mais caro possivel para esta serie: descartar o dado como problema de
+    # setup.
     if tool_calls == 0 or (num_turns or 0) <= 1:
         print("\n" + "=" * 62)
         print("ANULADA — o agente nao tocou no Rhino.")
@@ -520,6 +616,9 @@ def main():
             "jev_observacoes": observacoes,
             "artefato": f"output/{novo}" if novo else None,
             "tool_calls_mcp": tool_calls,
+            "tool_calls_concluidas": chamadas["concluidas"],
+            "tool_calls_falharam": chamadas["falhas"],
+            "log_cego_a_falha": chamadas["cego_a_falha"],
             "num_turns": num_turns,
             "duration_ms": r.get("duration_ms"),
             "custo_usd": r.get("total_cost_usd"),
@@ -585,6 +684,9 @@ def main():
         "inconclusivos": m.get("inconclusivos"),
         "avisos": m.get("avisos"),
         "tool_calls_mcp": tool_calls,
+        "tool_calls_concluidas": chamadas["concluidas"],
+        "tool_calls_falharam": chamadas["falhas"],
+        "log_cego_a_falha": chamadas["cego_a_falha"],
         "num_turns": num_turns,
         "duration_ms": r.get("duration_ms"),
         "custo_usd": r.get("total_cost_usd"),
