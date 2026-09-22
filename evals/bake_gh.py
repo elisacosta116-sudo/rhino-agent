@@ -67,9 +67,27 @@ else:
         obj.BakeGeometry(doc_rh, att, guids)
         ids.extend(list(guids))
 
+    # Malha de render, sem a qual o .3dm nao e' mensuravel.
+    # O `check.py` mede Brep pela malha; sem ela cai no casco de controle dos
+    # pontos de controle, que e' LIMITE SUPERIOR, e devolve INCONCLUSIVO --
+    # foi o bug de instrumento de 19/09 (2608,4 x 2333,8). Bakear sem malha
+    # entrega arquivo que o instrumento nao consegue ler.
+    # Sombrear o viewport NAO basta: a malha precisa existir no objeto e ser
+    # comitada, e o save precisa ser com SaveSmall desligado.
+    mp = Rhino.Geometry.MeshingParameters.DocumentCurrentSetting(doc_rh)
+    com_malha = 0
+    for gid in ids:
+        ro = doc_rh.Objects.FindId(gid)
+        if ro is None:
+            continue
+        if ro.CreateMeshes(Rhino.Geometry.MeshType.Render, mp, False) > 0:
+            ro.CommitChanges()
+            com_malha += 1
+
     doc_rh.Views.Redraw()
     print("componentes bakeaveis: %d" % bakeaveis)
     print("objetos bakeados: %d" % len(ids))
+    print("objetos com malha de render: %d" % com_malha)
     print("camada: %s (indice %d)" % (nome_camada or "(padrao)", indice))
 '''
 
